@@ -24,13 +24,13 @@
   "column_default": "nextval('case_links_link_id_seq'::regclass)"
 }, {
   "table_name": "case_links",
-  "column_name": "case_id_1",
+  "column_name": "parent_case_id",
   "data_type": "integer",
   "is_nullable": "YES",
   "column_default": null
 }, {
   "table_name": "case_links",
-  "column_name": "case_id_2",
+  "column_name": "child_case_id",
   "data_type": "integer",
   "is_nullable": "YES",
   "column_default": null
@@ -52,18 +52,6 @@
   "data_type": "date",
   "is_nullable": "YES",
   "column_default": "CURRENT_DATE"
-}, {
-  "table_name": "case_parties",
-  "column_name": "case_id",
-  "data_type": "integer",
-  "is_nullable": "NO",
-  "column_default": null
-}, {
-  "table_name": "case_parties",
-  "column_name": "party_id",
-  "data_type": "integer",
-  "is_nullable": "NO",
-  "column_default": null
 }, {
   "table_name": "case_references",
   "column_name": "case_id",
@@ -167,36 +155,6 @@
   "is_nullable": "YES",
   "column_default": null
 }, {
-  "table_name": "diary_entries",
-  "column_name": "entry_id",
-  "data_type": "integer",
-  "is_nullable": "NO",
-  "column_default": "nextval('diary_entries_entry_id_seq'::regclass)"
-}, {
-  "table_name": "diary_entries",
-  "column_name": "case_id",
-  "data_type": "integer",
-  "is_nullable": "YES",
-  "column_default": null
-}, {
-  "table_name": "diary_entries",
-  "column_name": "sequence_no",
-  "data_type": "integer",
-  "is_nullable": "YES",
-  "column_default": null
-}, {
-  "table_name": "diary_entries",
-  "column_name": "entry_date",
-  "data_type": "date",
-  "is_nullable": "YES",
-  "column_default": null
-}, {
-  "table_name": "diary_entries",
-  "column_name": "text",
-  "data_type": "text",
-  "is_nullable": "YES",
-  "column_default": null
-}, {
   "table_name": "documents",
   "column_name": "document_id",
   "data_type": "integer",
@@ -258,7 +216,7 @@
   "column_default": null
 }, {
   "table_name": "hearings",
-  "column_name": "diary_entry",
+  "column_name": "description",
   "data_type": "text",
   "is_nullable": "YES",
   "column_default": null
