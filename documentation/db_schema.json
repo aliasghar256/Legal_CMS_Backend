@@ -1,0 +1,367 @@
+[{
+  "table_name": "case_lawyers",
+  "column_name": "case_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "case_lawyers",
+  "column_name": "lawyer_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "case_lawyers",
+  "column_name": "party_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "case_links",
+  "column_name": "link_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('case_links_link_id_seq'::regclass)"
+}, {
+  "table_name": "case_links",
+  "column_name": "case_id_1",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "case_links",
+  "column_name": "case_id_2",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "case_links",
+  "column_name": "link_type",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "case_links",
+  "column_name": "notes",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "case_links",
+  "column_name": "created_at",
+  "data_type": "date",
+  "is_nullable": "YES",
+  "column_default": "CURRENT_DATE"
+}, {
+  "table_name": "case_parties",
+  "column_name": "case_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "case_parties",
+  "column_name": "party_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "case_references",
+  "column_name": "case_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "case_references",
+  "column_name": "cited_case_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "case_references",
+  "column_name": "reference_note",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "case_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('cases_case_id_seq'::regclass)"
+}, {
+  "table_name": "cases",
+  "column_name": "case_number",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "court_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "court_name",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "case_type",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "legal_section",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "filing_date",
+  "data_type": "date",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "status",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "stage",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "description",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "courts",
+  "column_name": "court_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('courts_court_id_seq'::regclass)"
+}, {
+  "table_name": "courts",
+  "column_name": "name",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "courts",
+  "column_name": "type",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "courts",
+  "column_name": "location",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "diary_entries",
+  "column_name": "entry_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('diary_entries_entry_id_seq'::regclass)"
+}, {
+  "table_name": "diary_entries",
+  "column_name": "case_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "diary_entries",
+  "column_name": "sequence_no",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "diary_entries",
+  "column_name": "entry_date",
+  "data_type": "date",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "diary_entries",
+  "column_name": "text",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "documents",
+  "column_name": "document_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('documents_document_id_seq'::regclass)"
+}, {
+  "table_name": "documents",
+  "column_name": "case_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "documents",
+  "column_name": "type",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "documents",
+  "column_name": "file_path",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "documents",
+  "column_name": "uploaded_by",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "documents",
+  "column_name": "date_uploaded",
+  "data_type": "date",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "hearings",
+  "column_name": "hearing_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('hearings_hearing_id_seq'::regclass)"
+}, {
+  "table_name": "hearings",
+  "column_name": "case_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "hearings",
+  "column_name": "judge_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "hearings",
+  "column_name": "date",
+  "data_type": "date",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "hearings",
+  "column_name": "diary_entry",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "hearings",
+  "column_name": "type",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "hearings",
+  "column_name": "next_hearing_date",
+  "data_type": "date",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "judges",
+  "column_name": "judge_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('judges_judge_id_seq'::regclass)"
+}, {
+  "table_name": "judges",
+  "column_name": "name",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "judges",
+  "column_name": "designation",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "judges",
+  "column_name": "court_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "lawyers",
+  "column_name": "lawyer_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('lawyers_lawyer_id_seq'::regclass)"
+}, {
+  "table_name": "lawyers",
+  "column_name": "name",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "lawyers",
+  "column_name": "license_no",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "lawyers",
+  "column_name": "contact_info",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "lawyers",
+  "column_name": "email",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "lawyers",
+  "column_name": "password",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "parties",
+  "column_name": "party_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('parties_party_id_seq'::regclass)"
+}, {
+  "table_name": "parties",
+  "column_name": "name",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "parties",
+  "column_name": "cnic",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "parties",
+  "column_name": "role",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "parties",
+  "column_name": "contact_info",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}]
