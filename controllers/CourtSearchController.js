@@ -368,6 +368,10 @@ class CourtSearchController {
       }
 
       const Case = require('../models/Case');
+      const Lawyer = require('../models/Lawyer');
+      const Party = require('../models/Party');
+      const Hearing = require('../models/Hearing');
+      
       const results = {
         successful: [],
         failed: [],
@@ -402,6 +406,9 @@ class CourtSearchController {
           const court = caseDetails['Court'] || '';
           const underSection = caseDetails['Under Section'] || '';
           const parties = profileData.parties || '';
+          const advocate1 = caseDetails['Advocate 1'] || '';
+          const advocate2 = caseDetails['Advocate 2'] || '';
+          const hearingHistory = profileData.hearingHistory || [];
 
           // Prepare case data for database creation
           const caseData = {
@@ -433,16 +440,118 @@ class CourtSearchController {
 
           // Create the case in database
           const createdCase = await Case.create(caseData);
+          const caseId = createdCase.case_id;
+
+          // Create lawyers
+          const createdLawyers = [];
           
+          // Create Advocate 1
+          if (advocate1 && advocate1.trim()) {
+            try {
+              const lawyer1 = await Lawyer.create({
+                name: advocate1.trim(),
+                license_no: null,
+                contact_info: null
+              });
+              createdLawyers.push(lawyer1);
+              
+              // Link lawyer to case
+              await Case.addLawyer(caseId, lawyer1.lawyer_id);
+            } catch (error) {
+              console.error(`Error creating Advocate 1 for case ${caseObj.caseCode}:`, error);
+            }
+          }
+
+          // Create Advocate 2 if exists
+          if (advocate2 && advocate2.trim()) {
+            try {
+              const lawyer2 = await Lawyer.create({
+                name: advocate2.trim(),
+                license_no: null,
+                contact_info: null
+              });
+              createdLawyers.push(lawyer2);
+              
+              // Link lawyer to case
+              await Case.addLawyer(caseId, lawyer2.lawyer_id);
+            } catch (error) {
+              console.error(`Error creating Advocate 2 for case ${caseObj.caseCode}:`, error);
+            }
+          }
+
+          // Create parties from the parties string using 'V/S' as delimiter
+          const createdParties = [];
+          
+          if (parties && parties.trim()) {
+            const partiesArray = parties.split(/\s+V\/S\s+/i).map(p => p.trim()).filter(p => p);
+            
+            for (const partyName of partiesArray) {
+              if (partyName) {
+                try {
+                  const party = await Party.create({
+                    name: partyName,
+                    cnic: null,
+                    role: null,
+                    contact_info: null
+                  });
+                  createdParties.push(party);
+                  
+                  // Link party to case
+                  await Case.addParty(caseId, party.party_id);
+                } catch (error) {
+                  console.error(`Error creating party "${partyName}" for case ${caseObj.caseCode}:`, error);
+                }
+              }
+            }
+          }
+
+          // Create hearings from hearing history
+          const createdHearings = [];
+          
+          for (const hearingEntry of hearingHistory) {
+            if (hearingEntry.date && hearingEntry.diary) {
+              try {
+                // Parse date from various formats
+                let hearingDate = null;
+                if (hearingEntry.date) {
+                  // Try to parse the date - it might be in different formats
+                  const parsedDate = new Date(hearingEntry.date);
+                  if (!isNaN(parsedDate.getTime())) {
+                    hearingDate = parsedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+                  }
+                }
+
+                if (hearingDate) {
+                  const hearing = await Hearing.create({
+                    case_id: caseId,
+                    judge_id: null,
+                    date: hearingDate,
+                    description: hearingEntry.diary,
+                    type: 'Regular'
+                  });
+                  createdHearings.push(hearing);
+                }
+              } catch (error) {
+                console.error(`Error creating hearing for case ${caseObj.caseCode}:`, error);
+              }
+            }
+          }
+
           results.successful.push({
             index: i,
             caseCode: caseObj.caseCode,
             createdCase: createdCase,
+            createdLawyers: createdLawyers,
+            createdParties: createdParties,
+            createdHearings: createdHearings,
             profileData: {
               caseNo,
               court,
               underSection,
-              parties
+              parties,
+              advocate1,
+              advocate2,
+              hearingHistoryCount: hearingHistory.length
             }
           });
           results.summary.created++;
