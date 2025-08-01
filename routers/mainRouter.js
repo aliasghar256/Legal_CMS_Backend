@@ -6,6 +6,8 @@ const documentRouter = require('./documentRouter')
 const courtRouter = require('./courtRouter')
 const judgeRouter = require('./judgeRouter')
 const partyRouter = require('./partyRouter')
+const userRouter = require('./userRouter')
+const courtSearchRouter = require('./courtSearchRouter')
 
 mainRouter = express.Router()
 
@@ -26,5 +28,7 @@ mainRouter.use('/documents', documentRouter);
 mainRouter.use('/courts', courtRouter);
 mainRouter.use('/judges', judgeRouter);
 mainRouter.use('/parties', partyRouter);
+mainRouter.use('/users', userRouter);
+mainRouter.use('/court-search', courtSearchRouter);
 
 module.exports = mainRouter

@@ -1,162 +1,337 @@
 const Lawyer = require('../models/Lawyer');
-const jwt = require('jsonwebtoken');
 
 class LawyerController {
-  // Signup - Register a new lawyer
-  static async signup(req, res) {
+  /**
+   * Create a new lawyer
+   */
+  static async create(req, res) {
     try {
-      const { name, email, password, license_no, contact_info } = req.body;
+      const { name, license_no, contact_info } = req.body;
 
-      // Validation
-      if (!name || !email || !password) {
+      // Validate required fields
+      if (!name) {
         return res.status(400).json({
           success: false,
-          message: 'Name, email, and password are required'
+          message: 'Lawyer name is required'
         });
       }
 
-      // Email format validation
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Please provide a valid email address'
-        });
+      // Check if license number already exists (if provided)
+      if (license_no) {
+        const licenseExists = await Lawyer.licenseExists(license_no);
+        if (licenseExists) {
+          return res.status(400).json({
+            success: false,
+            message: 'License number already exists'
+          });
+        }
       }
 
-      // Password strength validation
-      if (password.length < 6) {
-        return res.status(400).json({
-          success: false,
-          message: 'Password must be at least 6 characters long'
-        });
-      }
-
-      // Check if email already exists
-      const emailExists = await Lawyer.emailExists(email);
-      if (emailExists) {
-        return res.status(409).json({
-          success: false,
-          message: 'Email already registered'
-        });
-      }
-
-      // Create lawyer
-      const lawyer = await Lawyer.create({
-        name,
-        email,
-        password,
-        license_no: license_no || null,
-        contact_info: contact_info || null
-      });
-
-      // Generate JWT token
-      const token = jwt.sign(
-        { 
-          lawyer_id: lawyer.lawyer_id, 
-          email: lawyer.email 
-        },
-        process.env.JWT_SECRET || 'your-fallback-secret-key',
-        { expiresIn: '24h' }
-      );
+      const lawyer = await Lawyer.create({ name, license_no, contact_info });
 
       res.status(201).json({
         success: true,
-        message: 'Lawyer registered successfully',
-        data: {
-          lawyer: {
-            lawyer_id: lawyer.lawyer_id,
-            name: lawyer.name,
-            email: lawyer.email,
-            license_no: lawyer.license_no,
-            contact_info: lawyer.contact_info
-          },
-          token
-        }
+        message: 'Lawyer created successfully',
+        data: { lawyer }
       });
-
     } catch (error) {
-      console.error('Signup error:', error);
-      
-      // Handle unique constraint violations
-      if (error.code === '23505') {
-        return res.status(409).json({
-          success: false,
-          message: 'Email already registered'
-        });
-      }
-
+      console.error('Error creating lawyer:', error);
       res.status(500).json({
         success: false,
-        message: 'Internal server error during registration'
+        message: 'Failed to create lawyer',
+        error: error.message
       });
     }
   }
 
-  // Login - Authenticate lawyer
-  static async login(req, res) {
+  /**
+   * Get all lawyers with pagination
+   */
+  static async getAll(req, res) {
     try {
-      const { email, password } = req.body;
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      const offset = (page - 1) * limit;
 
-      // Validation
-      if (!email || !password) {
-        return res.status(400).json({
-          success: false,
-          message: 'Email and password are required'
-        });
-      }
-
-      // Find lawyer by email
-      const lawyer = await Lawyer.findByEmail(email);
-      if (!lawyer) {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid email or password'
-        });
-      }
-
-      // Verify password
-      const isValidPassword = await Lawyer.verifyPassword(password, lawyer.password);
-      if (!isValidPassword) {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid email or password'
-        });
-      }
-
-      // Generate JWT token
-      const token = jwt.sign(
-        { 
-          lawyer_id: lawyer.lawyer_id, 
-          email: lawyer.email 
-        },
-        process.env.JWT_SECRET || 'your-fallback-secret-key',
-        { expiresIn: '24h' }
-      );
+      const result = await Lawyer.findAll(limit, offset);
 
       res.status(200).json({
         success: true,
-        message: 'Login successful',
-        data: {
-          lawyer: {
-            lawyer_id: lawyer.lawyer_id,
-            name: lawyer.name,
-            email: lawyer.email,
-            license_no: lawyer.license_no,
-            contact_info: lawyer.contact_info
-          },
-          token
-        }
+        message: 'Lawyers retrieved successfully',
+        data: result
       });
-
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Error fetching lawyers:', error);
       res.status(500).json({
         success: false,
-        message: 'Internal server error during login'
+        message: 'Failed to fetch lawyers',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get lawyer by ID
+   */
+  static async getById(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!id || isNaN(parseInt(id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid lawyer ID'
+        });
+      }
+
+      const lawyer = await Lawyer.findById(parseInt(id));
+
+      if (!lawyer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Lawyer not found'
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Lawyer retrieved successfully',
+        data: { lawyer }
+      });
+    } catch (error) {
+      console.error('Error fetching lawyer:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch lawyer',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Update lawyer
+   */
+  static async update(req, res) {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+
+      if (!id || isNaN(parseInt(id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid lawyer ID'
+        });
+      }
+
+      // Check if lawyer exists
+      const existingLawyer = await Lawyer.findById(parseInt(id));
+      if (!existingLawyer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Lawyer not found'
+        });
+      }
+
+      // Check if new license number already exists (if license is being updated)
+      if (updates.license_no && updates.license_no !== existingLawyer.license_no) {
+        const licenseExists = await Lawyer.licenseExists(updates.license_no, parseInt(id));
+        if (licenseExists) {
+          return res.status(400).json({
+            success: false,
+            message: 'License number already exists'
+          });
+        }
+      }
+
+      const updatedLawyer = await Lawyer.update(parseInt(id), updates);
+
+      res.status(200).json({
+        success: true,
+        message: 'Lawyer updated successfully',
+        data: { lawyer: updatedLawyer }
+      });
+    } catch (error) {
+      console.error('Error updating lawyer:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update lawyer',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Delete lawyer
+   */
+  static async delete(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!id || isNaN(parseInt(id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid lawyer ID'
+        });
+      }
+
+      const deleted = await Lawyer.delete(parseInt(id));
+
+      if (!deleted) {
+        return res.status(404).json({
+          success: false,
+          message: 'Lawyer not found'
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Lawyer deleted successfully'
+      });
+    } catch (error) {
+      console.error('Error deleting lawyer:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete lawyer',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Search lawyers by name
+   */
+  static async searchByName(req, res) {
+    try {
+      const { name } = req.query;
+
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: 'Search name is required'
+        });
+      }
+
+      const lawyers = await Lawyer.findByName(name);
+
+      res.status(200).json({
+        success: true,
+        message: 'Lawyers search completed',
+        data: { lawyers }
+      });
+    } catch (error) {
+      console.error('Error searching lawyers:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to search lawyers',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Find lawyer by license number
+   */
+  static async findByLicense(req, res) {
+    try {
+      const { license_no } = req.params;
+
+      if (!license_no) {
+        return res.status(400).json({
+          success: false,
+          message: 'License number is required'
+        });
+      }
+
+      const lawyer = await Lawyer.findByLicenseNo(license_no);
+
+      if (!lawyer) {
+        return res.status(404).json({
+          success: false,
+          message: 'Lawyer not found with this license number'
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Lawyer found by license number',
+        data: { lawyer }
+      });
+    } catch (error) {
+      console.error('Error finding lawyer by license:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to find lawyer by license',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get cases for a lawyer
+   */
+  static async getCases(req, res) {
+    try {
+      const { id } = req.params;
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 20;
+      const offset = (page - 1) * limit;
+
+      if (!id || isNaN(parseInt(id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid lawyer ID'
+        });
+      }
+
+      const result = await Lawyer.getCases(parseInt(id), limit, offset);
+
+      res.status(200).json({
+        success: true,
+        message: 'Lawyer cases retrieved successfully',
+        data: result
+      });
+    } catch (error) {
+      console.error('Error fetching lawyer cases:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch lawyer cases',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get lawyer statistics
+   */
+  static async getStatistics(req, res) {
+    try {
+      const { id } = req.params;
+
+      if (!id || isNaN(parseInt(id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid lawyer ID'
+        });
+      }
+
+      const statistics = await Lawyer.getStatistics(parseInt(id));
+
+      res.status(200).json({
+        success: true,
+        message: 'Lawyer statistics retrieved successfully',
+        data: { statistics }
+      });
+    } catch (error) {
+      console.error('Error fetching lawyer statistics:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch lawyer statistics',
+        error: error.message
       });
     }
   }
 }
+
+module.exports = LawyerController;
 
 module.exports = LawyerController;

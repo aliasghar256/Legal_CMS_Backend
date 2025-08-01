@@ -281,18 +281,6 @@
   "is_nullable": "YES",
   "column_default": null
 }, {
-  "table_name": "lawyers",
-  "column_name": "email",
-  "data_type": "character varying",
-  "is_nullable": "YES",
-  "column_default": null
-}, {
-  "table_name": "lawyers",
-  "column_name": "password",
-  "data_type": "character varying",
-  "is_nullable": "YES",
-  "column_default": null
-}, {
   "table_name": "parties",
   "column_name": "party_id",
   "data_type": "integer",
@@ -318,6 +306,42 @@
   "column_default": null
 }, {
   "table_name": "parties",
+  "column_name": "contact_info",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "users",
+  "column_name": "user_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('users_user_id_seq'::regclass)"
+}, {
+  "table_name": "users",
+  "column_name": "email",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "users",
+  "column_name": "password",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "users",
+  "column_name": "name",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "users",
+  "column_name": "license_no",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "users",
   "column_name": "contact_info",
   "data_type": "text",
   "is_nullable": "YES",

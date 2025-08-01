@@ -1,0 +1,152 @@
+{
+  "info": {
+    "name": "Court Search API",
+    "description": "API for searching cases in Sindh District Courts",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Search Cases - By Party Name",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"district\": \"2\",\n  \"pname\": \"Ali Asghar Hussain\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/court-search/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "court-search", "search"]
+        },
+        "description": "Search for cases by party/accused name"
+      }
+    },
+    {
+      "name": "Search Cases - By Case Number",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"district\": \"2\",\n  \"caseno\": \"787\",\n  \"caseyear\": \"2024\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/court-search/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "court-search", "search"]
+        },
+        "description": "Search for cases by case number and year"
+      }
+    },
+    {
+      "name": "Search Cases - Advanced Search",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"district\": \"2\",\n  \"caseno\": \"\",\n  \"caseyear\": \"2024\",\n  \"courttype\": \"1\",\n  \"casecategory\": \"50\",\n  \"policeStation\": \"16\",\n  \"firno\": \"\",\n  \"firyear\": \"\",\n  \"pname\": \"Ali Asghar\",\n  \"status\": [\"1\"]\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/court-search/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "court-search", "search"]
+        },
+        "description": "Advanced search with multiple parameters"
+      }
+    },
+    {
+      "name": "Search Cases - By FIR Details",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"district\": \"2\",\n  \"policeStation\": \"16\",\n  \"firno\": \"123\",\n  \"firyear\": \"2024\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/court-search/search",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "court-search", "search"]
+        },
+        "description": "Search for cases by FIR number and police station"
+      }
+    },
+    {
+      "name": "Get Case Profile",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"caseCode\": \"78702024006100580\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/court-search/case-profile",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "court-search", "case-profile"]
+        },
+        "description": "Get detailed profile of a specific case"
+      }
+    },
+    {
+      "name": "Get Districts",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/court-search/districts",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "court-search", "districts"]
+        },
+        "description": "Get list of available districts"
+      }
+    },
+    {
+      "name": "Get Court Types",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/court-search/court-types",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "court-search", "court-types"]
+        },
+        "description": "Get list of available court types"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    }
+  ]
+}

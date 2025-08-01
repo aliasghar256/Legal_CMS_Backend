@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const Lawyer = require('../models/Lawyer');
+const User = require('../models/User');
 
 const authMiddleware = async (req, res, next) => {
   try {
@@ -17,18 +17,18 @@ const authMiddleware = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-fallback-secret-key');
 
-    // Check if lawyer still exists
-    const lawyer = await Lawyer.findById(decoded.lawyer_id);
-    if (!lawyer) {
+    // Check if user still exists
+    const user = await User.findById(decoded.user_id);
+    if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Access denied. Lawyer not found.'
+        message: 'Access denied. User not found.'
       });
     }
 
-    // Add lawyer info to request
-    req.lawyer = {
-      lawyer_id: decoded.lawyer_id,
+    // Add user info to request
+    req.user = {
+      user_id: decoded.user_id,
       email: decoded.email
     };
 

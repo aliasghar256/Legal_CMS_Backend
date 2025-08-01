@@ -7,6 +7,11 @@ Add hearing type in hearings
 Case Links on frontend?
 
 Cases:
+legal section
+stage
+nextr hearing
+diary
+bench
 
 legal section on Add Case frontend.
 status & stage on Add Case?
@@ -27,5 +32,4 @@ Case_Lawyers:
 You are assigned to your own case by default
 One case can have one lawyer or multiple?
 
-Extra:
-Adding Lawyers to cases? Local vs User Lawyers?
+Use clerk nextJS for OTP verification
