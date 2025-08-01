@@ -13,6 +13,8 @@ class Case {
    * @param {string} [caseData.status] - Case status (optional)
    * @param {string} [caseData.stage] - Case stage (optional)
    * @param {string} [caseData.description] - Case description (optional)
+   * @param {string} [caseData.next_hearing] - Next hearing date (optional)
+   * @param {number} [caseData.cfms_case_code] - CFMS case code for court system integration (optional)
    * @returns {Promise<Object>} Created case data
    */
   static async create(caseData) {
@@ -26,17 +28,19 @@ class Case {
         filing_date = null,
         status = null,
         stage = null,
-        description = null
+        description = null,
+        next_hearing = null,
+        cfms_case_code = null
       } = caseData;
 
       const result = await query(
         `INSERT INTO cases (case_number, court_id, court_name, case_type, legal_section, 
-                           filing_date, status, stage, description) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+                           filing_date, status, stage, description, next_hearing, cfms_case_code) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
          RETURNING case_id, case_number, court_id, court_name, case_type, legal_section, 
-                   filing_date, status, stage, description`,
+                   filing_date, status, stage, description, next_hearing, cfms_case_code`,
         [case_number, court_id, court_name, case_type, legal_section, 
-         filing_date, status, stage, description]
+         filing_date, status, stage, description, next_hearing, cfms_case_code]
       );
 
       return result.rows[0];
@@ -54,7 +58,7 @@ class Case {
     try {
       const result = await query(
         `SELECT case_id, case_number, court_id, court_name, case_type, legal_section, 
-                filing_date, status, stage, description 
+                filing_date, status, stage, description, next_hearing, cfms_case_code 
          FROM cases WHERE case_id = $1`,
         [case_id]
       );
@@ -139,7 +143,7 @@ class Case {
   static async findByCaseNumber(case_number) {
     try {
       const result = await query(
-        `SELECT case_id, case_number, court_name, case_type, filing_date, status, stage
+        `SELECT case_id, case_number, court_name, case_type, filing_date, status, stage, next_hearing
          FROM cases WHERE case_number ILIKE $1 ORDER BY filing_date DESC`,
         [`%${case_number}%`]
       );
@@ -157,7 +161,7 @@ class Case {
   static async findByStatus(status) {
     try {
       const result = await query(
-        `SELECT case_id, case_number, court_name, case_type, filing_date, status, stage
+        `SELECT case_id, case_number, court_name, case_type, filing_date, status, stage, next_hearing
          FROM cases WHERE status = $1 ORDER BY filing_date DESC`,
         [status]
       );
@@ -175,7 +179,7 @@ class Case {
   static async findByCourtId(court_id) {
     try {
       const result = await query(
-        `SELECT case_id, case_number, court_name, case_type, filing_date, status, stage
+        `SELECT case_id, case_number, court_name, case_type, filing_date, status, stage, next_hearing
          FROM cases WHERE court_id = $1 ORDER BY filing_date DESC`,
         [court_id]
       );
@@ -196,7 +200,7 @@ class Case {
    */
   static async findAll(limit = 20, offset = 0, status = null, case_type = null, court_id = null) {
     try {
-      let sql = `SELECT case_id, case_number, court_name, case_type, filing_date, status, stage
+      let sql = `SELECT case_id, case_number, court_name, case_type, filing_date, status, stage, next_hearing
                  FROM cases`;
       let params = [];
       let conditions = [];
@@ -267,7 +271,8 @@ class Case {
       let paramCount = 1;
 
       const allowedFields = ['case_number', 'court_id', 'court_name', 'case_type', 
-                            'legal_section', 'filing_date', 'status', 'stage', 'description'];
+                            'legal_section', 'filing_date', 'status', 'stage', 'description', 
+                            'next_hearing', 'cfms_case_code'];
 
       Object.keys(updates).forEach(key => {
         if (allowedFields.includes(key) && updates[key] !== undefined) {
@@ -285,7 +290,7 @@ class Case {
       const result = await query(
         `UPDATE cases SET ${fields.join(', ')} WHERE case_id = $${paramCount} 
          RETURNING case_id, case_number, court_id, court_name, case_type, legal_section, 
-                   filing_date, status, stage, description`,
+                   filing_date, status, stage, description, next_hearing, cfms_case_code`,
         values
       );
 
@@ -459,6 +464,129 @@ class Case {
         total_hearings: parseInt(hearingsResult.rows[0].count),
         total_documents: parseInt(documentsResult.rows[0].count)
       };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Find case by CFMS case code
+   * @param {number} cfms_case_code - CFMS case code from court system
+   * @returns {Promise<Object|null>} Case data or null if not found
+   */
+  static async findByCfmsCaseCode(cfms_case_code) {
+    try {
+      const result = await query(
+        `SELECT case_id, case_number, court_id, court_name, case_type, legal_section, 
+                filing_date, status, stage, description, next_hearing, cfms_case_code 
+         FROM cases WHERE cfms_case_code = $1`,
+        [cfms_case_code]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Create case from court search data
+   * @param {Object} courtData - Data from court search API
+   * @returns {Promise<Object>} Created case data
+   */
+  static async createFromCourtSearch(courtData) {
+    try {
+      const {
+        caseCode,
+        caseNumber,
+        caseType,
+        courtName,
+        parties,
+        statusText,
+        hearingDate
+      } = courtData;
+
+      const caseData = {
+        case_number: caseNumber,
+        court_name: courtName,
+        case_type: caseType,
+        status: statusText,
+        cfms_case_code: parseInt(caseCode),
+        description: parties,
+        next_hearing: hearingDate !== 'NOT FOUND' ? hearingDate : null,
+        filing_date: new Date().toISOString().split('T')[0] // Current date as filing date
+      };
+
+      return await this.create(caseData);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Update case with court search data
+   * @param {number} case_id - Case ID
+   * @param {Object} courtData - Data from court search API
+   * @returns {Promise<Object|null>} Updated case data
+   */
+  static async updateFromCourtSearch(case_id, courtData) {
+    try {
+      const {
+        caseNumber,
+        caseType,
+        courtName,
+        parties,
+        statusText,
+        hearingDate
+      } = courtData;
+
+      const updates = {
+        case_number: caseNumber,
+        court_name: courtName,
+        case_type: caseType,
+        status: statusText,
+        description: parties,
+        next_hearing: hearingDate !== 'NOT FOUND' ? hearingDate : null
+      };
+
+      return await this.update(case_id, updates);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get cases with upcoming hearings
+   * @param {number} [days=7] - Number of days to look ahead
+   * @returns {Promise<Array>} Array of cases with upcoming hearings
+   */
+  static async getCasesWithUpcomingHearings(days = 7) {
+    try {
+      const result = await query(
+        `SELECT case_id, case_number, court_name, case_type, status, next_hearing
+         FROM cases 
+         WHERE next_hearing BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '${days} days')
+         ORDER BY next_hearing ASC`,
+        []
+      );
+      return result.rows;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get cases with overdue hearings
+   * @returns {Promise<Array>} Array of cases with overdue hearings
+   */
+  static async getCasesWithOverdueHearings() {
+    try {
+      const result = await query(
+        `SELECT case_id, case_number, court_name, case_type, status, next_hearing
+         FROM cases 
+         WHERE next_hearing < CURRENT_DATE AND next_hearing IS NOT NULL
+         ORDER BY next_hearing ASC`
+      );
+      return result.rows;
     } catch (error) {
       throw error;
     }

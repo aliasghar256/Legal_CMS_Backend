@@ -22,9 +22,7 @@ Next Hearing Date?
 for Create & Update.
 
 Hearings:
-
-Time?
-Hearing Type?
+Modify DB to 3NF
 
 Assumptions:
 

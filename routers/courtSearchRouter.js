@@ -9,6 +9,9 @@ courtSearchRouter.post('/search', CourtSearchController.searchCases);
 // Get case profile details
 courtSearchRouter.post('/profile', CourtSearchController.getCaseProfile);
 
+// Create cases from court profiles
+courtSearchRouter.post('/create-cases', CourtSearchController.createCasesFromProfiles);
+
 // Get districts list
 courtSearchRouter.get('/districts', CourtSearchController.getDistricts);
 

@@ -344,6 +344,166 @@ class CourtSearchController {
     }
   }
 
+  // Create cases from profiles
+  static async createCasesFromProfiles(req, res) {
+    try {
+      const { cases } = req.body;
+      
+      if (!cases || !Array.isArray(cases) || cases.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cases array is required and must not be empty'
+        });
+      }
+
+      // Validate each case object
+      for (let i = 0; i < cases.length; i++) {
+        const caseObj = cases[i];
+        if (!caseObj.caseCode) {
+          return res.status(400).json({
+            success: false,
+            message: `Case at index ${i} is missing required field: caseCode`
+          });
+        }
+      }
+
+      const Case = require('../models/Case');
+      const results = {
+        successful: [],
+        failed: [],
+        summary: {
+          total: cases.length,
+          created: 0,
+          failed: 0
+        }
+      };
+
+      // Process each case
+      for (let i = 0; i < cases.length; i++) {
+        const caseObj = cases[i];
+        
+        try {
+          // Get case profile using the same logic as getCaseProfile
+          const profileData = await CourtSearchController.getCaseProfileData(caseObj.caseCode);
+          
+          if (!profileData) {
+            results.failed.push({
+              index: i,
+              caseCode: caseObj.caseCode,
+              error: 'Failed to retrieve case profile from court system'
+            });
+            results.summary.failed++;
+            continue;
+          }
+
+          // Extract required data from profile
+          const caseDetails = profileData.caseDetails;
+          const caseNo = caseDetails['Case No'] || '';
+          const court = caseDetails['Court'] || '';
+          const underSection = caseDetails['Under Section'] || '';
+          const parties = profileData.parties || '';
+
+          // Prepare case data for database creation
+          const caseData = {
+            cfms_case_code: parseInt(caseObj.caseCode),
+            case_number: caseNo,
+            court_name: court,
+            legal_section: underSection,
+            case_type: caseObj.caseType || null,
+            status: caseObj.status || null,
+            next_hearing: caseObj.hearingDate || null,
+            filing_date: null,
+            stage: null,
+            description: null
+          };
+
+          // Check if case already exists with this CFMS code
+          const existingCase = await Case.findByCfmsCaseCode(caseData.cfms_case_code);
+          
+          if (existingCase) {
+            results.failed.push({
+              index: i,
+              caseCode: caseObj.caseCode,
+              error: 'Case already exists in database',
+              existingCaseId: existingCase.case_id
+            });
+            results.summary.failed++;
+            continue;
+          }
+
+          // Create the case in database
+          const createdCase = await Case.create(caseData);
+          
+          results.successful.push({
+            index: i,
+            caseCode: caseObj.caseCode,
+            createdCase: createdCase,
+            profileData: {
+              caseNo,
+              court,
+              underSection,
+              parties
+            }
+          });
+          results.summary.created++;
+
+        } catch (error) {
+          console.error(`Error processing case at index ${i}:`, error);
+          results.failed.push({
+            index: i,
+            caseCode: caseObj.caseCode,
+            error: error.message
+          });
+          results.summary.failed++;
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Processed ${results.summary.total} cases. Created: ${results.summary.created}, Failed: ${results.summary.failed}`,
+        results: results
+      });
+
+    } catch (error) {
+      console.error('Error in createCasesFromProfiles:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+
+  // Helper function to get case profile data (extracted logic from getCaseProfile)
+  static async getCaseProfileData(caseCode) {
+    try {
+      // Prepare form data for case profile request
+      const formData = new URLSearchParams();
+      formData.append('_token', 'GMqEvs46v2PUrZOKICuoXNU1h76Wquf5WKADJ4l6');
+      formData.append('casecode', caseCode);
+
+      // Make request to get case profile
+      const response = await axios.post('https://cases.districtcourtssindh.gos.pk/case-profile', formData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Origin': 'https://cases.districtcourtssindh.gos.pk',
+          'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
+          'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+          'X-Requested-With': 'XMLHttpRequest',
+          'Cookie': 'XSRF-TOKEN=eyJpdiI6IkJNY3phTDZFR0wrK01yWWlmMnhuMnc9PSIsInZhbHVlIjoiTzM4VllvK2ZUUVc0a2ZncTRkV2pJNG9XT1JmRTlscmZFUFRnYmpYTktWZGRuTy9QZFhnQkMzMXB1YzI5anlBY0I2Tm9oNXZMVjI1QWxhK0pKQjFzNkQ2MGlIellvUTZyeEpIanVRVDNSOTU0RGJYcUsxb0tMbGw4RytPakZ6bnEiLCJtYWMiOiIwOTM0ZGUxOTdmN2I4ZDRkOWU4N2I3ZTQwMzgxNTg3MTRmYzI4YzIxZWYxZWRiM2QyNGI1MGM4NTUzYzEyMjA5IiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6InBmM2RCSVRvdktDRWhseGcrai8zcFE9PSIsInZhbHVlIjoiY3VMMGtzUEdoYzlwNE1TU1RyNGlQSkMxek9PcmNDdGdhMVd3Q09DRnB3dTlBZWVqcHRTQkl0Z2JQa3NZS3Z2c08rTG5lb3UveU9lMVRlakQ1MUl3TWlpNjZBNWN0RWlRaHRkanBzQVo3bU12QmZjaTRuVm5XMjYxUWgrNTQ5MHIiLCJtYWMiOiJjNTgyMzlhYzIzNWZlYWExZDhjNDM4NzhiY2RjMzg5MDliNjVkMGM0OGU5YTc1ZThkMjUwNTk2YjMyYTRiOTcwIiwidGFnIjoiIn0%3D'
+        },
+        timeout: 15000
+      });
+
+      // Parse the case profile HTML and return the data
+      return CourtSearchController.parseCaseProfile(response.data);
+
+    } catch (error) {
+      console.error('Error getting case profile data:', error);
+      return null;
+    }
+  }
+
   // Get court types
   static async getCourtTypes(req, res) {
     try {

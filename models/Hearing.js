@@ -9,7 +9,6 @@ class Hearing {
    * @param {string} [hearingData.date] - Hearing date (optional)
    * @param {string} [hearingData.description] - Hearing description (optional)
    * @param {string} [hearingData.type] - Hearing type (optional)
-   * @param {string} [hearingData.next_hearing_date] - Next hearing date (optional)
    * @returns {Promise<Object>} Created hearing data
    */
   static async create(hearingData) {
@@ -19,15 +18,14 @@ class Hearing {
         judge_id = null,
         date = null,
         description = null,
-        type = null,
-        next_hearing_date = null
+        type = null
       } = hearingData;
 
       const result = await query(
-        `INSERT INTO hearings (case_id, judge_id, date, description, type, next_hearing_date) 
-         VALUES ($1, $2, $3, $4, $5, $6) 
-         RETURNING hearing_id, case_id, judge_id, date, description, type, next_hearing_date`,
-        [case_id, judge_id, date, description, type, next_hearing_date]
+        `INSERT INTO hearings (case_id, judge_id, date, description, type) 
+         VALUES ($1, $2, $3, $4, $5) 
+         RETURNING hearing_id, case_id, judge_id, date, description, type`,
+        [case_id, judge_id, date, description, type]
       );
 
       return result.rows[0];
@@ -44,7 +42,7 @@ class Hearing {
   static async findById(hearing_id) {
     try {
       const result = await query(
-        `SELECT hearing_id, case_id, judge_id, date, description, type, next_hearing_date 
+        `SELECT hearing_id, case_id, judge_id, date, description, type 
          FROM hearings WHERE hearing_id = $1`,
         [hearing_id]
       );
@@ -62,7 +60,7 @@ class Hearing {
   static async findByIdWithDetails(hearing_id) {
     try {
       const result = await query(
-        `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.description, h.type, h.next_hearing_date,
+        `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.description, h.type,
                 c.case_number, c.case_type, c.status as case_status,
                 j.name as judge_name, j.designation as judge_designation,
                 court.name as court_name, court.location as court_location
@@ -89,7 +87,7 @@ class Hearing {
   static async findByCaseId(case_id, limit = 50, offset = 0) {
     try {
       const result = await query(
-        `SELECT h.hearing_id, h.judge_id, h.date, h.description, h.type, h.next_hearing_date,
+        `SELECT h.hearing_id, h.judge_id, h.date, h.description, h.type,
                 j.name as judge_name, j.designation as judge_designation
          FROM hearings h
          LEFT JOIN judges j ON h.judge_id = j.judge_id
@@ -130,7 +128,7 @@ class Hearing {
   static async findByJudgeId(judge_id, limit = 50, offset = 0) {
     try {
       const result = await query(
-        `SELECT h.hearing_id, h.case_id, h.date, h.description, h.type, h.next_hearing_date,
+        `SELECT h.hearing_id, h.case_id, h.date, h.description, h.type,
                 c.case_number, c.case_type, c.status as case_status
          FROM hearings h
          LEFT JOIN cases c ON h.case_id = c.case_id
@@ -172,7 +170,7 @@ class Hearing {
   static async findByDateRange(start_date, end_date, limit = 100, offset = 0) {
     try {
       const result = await query(
-        `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.description, h.type, h.next_hearing_date,
+        `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.description, h.type,
                 c.case_number, c.case_type,
                 j.name as judge_name
          FROM hearings h
@@ -284,7 +282,7 @@ class Hearing {
    */
   static async findAll(limit = 50, offset = 0, type = null, judge_id = null) {
     try {
-      let sql = `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.description, h.type, h.next_hearing_date,
+      let sql = `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.description, h.type,
                         c.case_number, c.case_type,
                         j.name as judge_name
                  FROM hearings h
@@ -352,7 +350,7 @@ class Hearing {
       const values = [];
       let paramCount = 1;
 
-      const allowedFields = ['case_id', 'judge_id', 'date', 'description', 'type', 'next_hearing_date'];
+      const allowedFields = ['case_id', 'judge_id', 'date', 'description', 'type'];
 
       Object.keys(updates).forEach(key => {
         if (allowedFields.includes(key) && updates[key] !== undefined) {
@@ -369,7 +367,7 @@ class Hearing {
       values.push(hearing_id);
       const result = await query(
         `UPDATE hearings SET ${fields.join(', ')} WHERE hearing_id = $${paramCount} 
-         RETURNING hearing_id, case_id, judge_id, date, description, type, next_hearing_date`,
+         RETURNING hearing_id, case_id, judge_id, date, description, type`,
         values
       );
 
@@ -439,45 +437,75 @@ class Hearing {
   }
 
   /**
-   * Get overdue hearings (next_hearing_date has passed)
-   * @returns {Promise<Array>} Array of overdue hearings
+   * Get hearing statistics
+   * @returns {Promise<Object>} Hearing statistics
    */
-  static async getOverdueHearings() {
+  static async getStatistics() {
     try {
-      const result = await query(
-        `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.next_hearing_date,
-                c.case_number, c.case_type, c.status as case_status,
-                j.name as judge_name
-         FROM hearings h
-         LEFT JOIN cases c ON h.case_id = c.case_id
-         LEFT JOIN judges j ON h.judge_id = j.judge_id
-         WHERE h.next_hearing_date < CURRENT_DATE AND h.next_hearing_date IS NOT NULL
-         ORDER BY h.next_hearing_date ASC`
-      );
-      return result.rows;
+      const [totalResult, todayResult, upcomingResult] = await Promise.all([
+        query('SELECT COUNT(*) as count FROM hearings'),
+        query('SELECT COUNT(*) as count FROM hearings WHERE date = CURRENT_DATE'),
+        query('SELECT COUNT(*) as count FROM hearings WHERE date > CURRENT_DATE')
+      ]);
+
+      return {
+        total_hearings: parseInt(totalResult.rows[0].count),
+        todays_hearings: parseInt(todayResult.rows[0].count),
+        upcoming_hearings: parseInt(upcomingResult.rows[0].count)
+      };
     } catch (error) {
       throw error;
     }
   }
 
   /**
-   * Get hearing statistics
-   * @returns {Promise<Object>} Hearing statistics
+   * Create hearing from court search data
+   * @param {Object} hearingData - Data from court search API
+   * @returns {Promise<Object>} Created hearing data
    */
-  static async getStatistics() {
+  static async createFromCourtSearch(hearingData) {
     try {
-      const [totalResult, todayResult, upcomingResult, overdueResult] = await Promise.all([
-        query('SELECT COUNT(*) as count FROM hearings'),
-        query('SELECT COUNT(*) as count FROM hearings WHERE date = CURRENT_DATE'),
-        query('SELECT COUNT(*) as count FROM hearings WHERE date > CURRENT_DATE'),
-        query('SELECT COUNT(*) as count FROM hearings WHERE next_hearing_date < CURRENT_DATE AND next_hearing_date IS NOT NULL')
+      const {
+        case_id,
+        date,
+        diary,
+        judge_id = null,
+        type = 'Regular'
+      } = hearingData;
+
+      const newHearing = {
+        case_id,
+        judge_id,
+        date,
+        description: diary,
+        type
+      };
+
+      return await this.create(newHearing);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get hearing summary by case
+   * @param {number} case_id - Case ID
+   * @returns {Promise<Object>} Hearing summary
+   */
+  static async getHearingSummaryByCase(case_id) {
+    try {
+      const [totalResult, latestResult, nextResult] = await Promise.all([
+        query('SELECT COUNT(*) as count FROM hearings WHERE case_id = $1', [case_id]),
+        query(`SELECT date, description FROM hearings WHERE case_id = $1 
+               ORDER BY date DESC LIMIT 1`, [case_id]),
+        query(`SELECT date, description FROM hearings WHERE case_id = $1 
+               AND date > CURRENT_DATE ORDER BY date ASC LIMIT 1`, [case_id])
       ]);
 
       return {
         total_hearings: parseInt(totalResult.rows[0].count),
-        todays_hearings: parseInt(todayResult.rows[0].count),
-        upcoming_hearings: parseInt(upcomingResult.rows[0].count),
-        overdue_hearings: parseInt(overdueResult.rows[0].count)
+        latest_hearing: latestResult.rows[0] || null,
+        next_hearing: nextResult.rows[0] || null
       };
     } catch (error) {
       throw error;

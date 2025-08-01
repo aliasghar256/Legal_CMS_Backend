@@ -79,7 +79,7 @@
 }, {
   "table_name": "cases",
   "column_name": "case_number",
-  "data_type": "character varying",
+  "data_type": "text",
   "is_nullable": "YES",
   "column_default": null
 }, {
@@ -103,7 +103,7 @@
 }, {
   "table_name": "cases",
   "column_name": "legal_section",
-  "data_type": "character varying",
+  "data_type": "text",
   "is_nullable": "YES",
   "column_default": null
 }, {
@@ -128,6 +128,18 @@
   "table_name": "cases",
   "column_name": "description",
   "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "next_hearing",
+  "data_type": "date",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
+  "column_name": "cfms_case_code",
+  "data_type": "integer",
   "is_nullable": "YES",
   "column_default": null
 }, {
@@ -224,12 +236,6 @@
   "table_name": "hearings",
   "column_name": "type",
   "data_type": "character varying",
-  "is_nullable": "YES",
-  "column_default": null
-}, {
-  "table_name": "hearings",
-  "column_name": "next_hearing_date",
-  "data_type": "date",
   "is_nullable": "YES",
   "column_default": null
 }, {
