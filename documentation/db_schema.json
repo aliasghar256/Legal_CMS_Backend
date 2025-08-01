@@ -17,6 +17,12 @@
   "is_nullable": "NO",
   "column_default": null
 }, {
+  "table_name": "case_lawyers",
+  "column_name": "user_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
   "table_name": "case_links",
   "column_name": "link_id",
   "data_type": "integer",
@@ -139,7 +145,7 @@
 }, {
   "table_name": "cases",
   "column_name": "cfms_case_code",
-  "data_type": "integer",
+  "data_type": "character varying",
   "is_nullable": "YES",
   "column_default": null
 }, {

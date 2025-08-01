@@ -7,17 +7,16 @@ Add hearing type in hearings
 Case Links on frontend?
 
 Cases:
-legal section
-stage
-nextr hearing
-diary
-bench
+Proper destructuring of CFMS Responses.
 
-legal section on Add Case frontend.
-status & stage on Add Case?
 How to update status on existing entry
 Priority?
-Next Hearing Date?
+
+duplicate & error checking
+status & stage Updates
+
+Token & COokie issuance.
+
 
 for Create & Update.
 

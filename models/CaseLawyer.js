@@ -7,9 +7,10 @@ class CaseLawyer {
    * @param {number} caseLawyerData.case_id - Case ID (required)
    * @param {number} caseLawyerData.lawyer_id - Lawyer ID (required)
    * @param {number} caseLawyerData.party_id - Party ID (required)
+   * @param {number} [caseLawyerData.user_id] - User ID (optional)
    * @returns {Promise<Object>} Created case-lawyer relationship
    */
-  static async create({ case_id, lawyer_id, party_id }) {
+  static async create({ case_id, lawyer_id, party_id, user_id = null }) {
     try {
       if (!case_id || !lawyer_id || !party_id) {
         throw new Error('Case ID, Lawyer ID, and Party ID are required');
@@ -22,10 +23,10 @@ class CaseLawyer {
       }
 
       const result = await query(
-        `INSERT INTO case_lawyers (case_id, lawyer_id, party_id) 
-         VALUES ($1, $2, $3) 
-         RETURNING case_id, lawyer_id, party_id`,
-        [case_id, lawyer_id, party_id]
+        `INSERT INTO case_lawyers (case_id, lawyer_id, party_id, user_id) 
+         VALUES ($1, $2, $3, $4) 
+         RETURNING case_id, lawyer_id, party_id, user_id`,
+        [case_id, lawyer_id, party_id, user_id]
       );
 
       return result.rows[0];
@@ -44,7 +45,7 @@ class CaseLawyer {
   static async findByIds(case_id, lawyer_id, party_id) {
     try {
       const result = await query(
-        'SELECT case_id, lawyer_id, party_id FROM case_lawyers WHERE case_id = $1 AND lawyer_id = $2 AND party_id = $3',
+        'SELECT case_id, lawyer_id, party_id, user_id FROM case_lawyers WHERE case_id = $1 AND lawyer_id = $2 AND party_id = $3',
         [case_id, lawyer_id, party_id]
       );
       return result.rows[0] || null;
@@ -61,12 +62,14 @@ class CaseLawyer {
   static async getLawyersByCase(case_id) {
     try {
       const result = await query(
-        `SELECT cl.case_id, cl.lawyer_id, cl.party_id,
+        `SELECT cl.case_id, cl.lawyer_id, cl.party_id, cl.user_id,
                 l.name as lawyer_name, l.license_no, l.contact_info as lawyer_contact,
-                p.name as party_name, p.cnic, p.role, p.contact_info as party_contact
+                p.name as party_name, p.cnic, p.role, p.contact_info as party_contact,
+                u.name as user_name, u.email as user_email
          FROM case_lawyers cl
          INNER JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
          INNER JOIN parties p ON cl.party_id = p.party_id
+         LEFT JOIN users u ON cl.user_id = u.user_id
          WHERE cl.case_id = $1
          ORDER BY l.name`,
         [case_id]
@@ -308,15 +311,15 @@ class CaseLawyer {
           throw new Error(`Relationship at index ${index} is missing required fields`);
         }
         
-        placeholders.push(`($${paramCount}, $${paramCount + 1}, $${paramCount + 2})`);
-        values.push(rel.case_id, rel.lawyer_id, rel.party_id);
-        paramCount += 3;
+        placeholders.push(`($${paramCount}, $${paramCount + 1}, $${paramCount + 2}, $${paramCount + 3})`);
+        values.push(rel.case_id, rel.lawyer_id, rel.party_id, rel.user_id || null);
+        paramCount += 4;
       });
 
       const result = await query(
-        `INSERT INTO case_lawyers (case_id, lawyer_id, party_id) 
+        `INSERT INTO case_lawyers (case_id, lawyer_id, party_id, user_id) 
          VALUES ${placeholders.join(', ')} 
-         RETURNING case_id, lawyer_id, party_id`,
+         RETURNING case_id, lawyer_id, party_id, user_id`,
         values
       );
 

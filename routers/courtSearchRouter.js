@@ -1,6 +1,8 @@
 const express = require('express');
 const CourtSearchController = require('../controllers/CourtSearchController');
 
+const authMiddleware = require('../middleware/auth')
+
 const courtSearchRouter = express.Router();
 
 // Search cases in Sindh District Courts
@@ -10,7 +12,7 @@ courtSearchRouter.post('/search', CourtSearchController.searchCases);
 courtSearchRouter.post('/profile', CourtSearchController.getCaseProfile);
 
 // Create cases from court profiles
-courtSearchRouter.post('/create-cases', CourtSearchController.createCasesFromProfiles);
+courtSearchRouter.post('/create-cases', authMiddleware, CourtSearchController.createCasesFromProfiles);
 
 // Get districts list
 courtSearchRouter.get('/districts', CourtSearchController.getDistricts);

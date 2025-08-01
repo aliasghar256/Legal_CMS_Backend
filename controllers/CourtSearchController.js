@@ -348,6 +348,7 @@ class CourtSearchController {
   static async createCasesFromProfiles(req, res) {
     try {
       const { cases } = req.body;
+      const userId = req.user ? req.user.user_id : null; // Extract user_id from auth middleware
       
       if (!cases || !Array.isArray(cases) || cases.length === 0) {
         return res.status(400).json({
@@ -371,6 +372,7 @@ class CourtSearchController {
       const Lawyer = require('../models/Lawyer');
       const Party = require('../models/Party');
       const Hearing = require('../models/Hearing');
+      const CaseLawyer = require('../models/CaseLawyer');
       
       const results = {
         successful: [],
@@ -454,9 +456,6 @@ class CourtSearchController {
                 contact_info: null
               });
               createdLawyers.push(lawyer1);
-              
-              // Link lawyer to case
-              await Case.addLawyer(caseId, lawyer1.lawyer_id);
             } catch (error) {
               console.error(`Error creating Advocate 1 for case ${caseObj.caseCode}:`, error);
             }
@@ -471,9 +470,6 @@ class CourtSearchController {
                 contact_info: null
               });
               createdLawyers.push(lawyer2);
-              
-              // Link lawyer to case
-              await Case.addLawyer(caseId, lawyer2.lawyer_id);
             } catch (error) {
               console.error(`Error creating Advocate 2 for case ${caseObj.caseCode}:`, error);
             }
@@ -495,12 +491,29 @@ class CourtSearchController {
                     contact_info: null
                   });
                   createdParties.push(party);
-                  
-                  // Link party to case
-                  await Case.addParty(caseId, party.party_id);
                 } catch (error) {
                   console.error(`Error creating party "${partyName}" for case ${caseObj.caseCode}:`, error);
                 }
+              }
+            }
+          }
+
+          // Create case_lawyers relationships
+          const createdCaseLawyers = [];
+          
+          // Create relationships for each lawyer with each party
+          for (const lawyer of createdLawyers) {
+            for (const party of createdParties) {
+              try {
+                const caseLawyerRelation = await CaseLawyer.create({
+                  case_id: caseId,
+                  lawyer_id: lawyer.lawyer_id,
+                  party_id: party.party_id,
+                  user_id: userId
+                });
+                createdCaseLawyers.push(caseLawyerRelation);
+              } catch (error) {
+                console.error(`Error creating case-lawyer relationship for case ${caseObj.caseCode}:`, error);
               }
             }
           }
@@ -543,6 +556,7 @@ class CourtSearchController {
             createdCase: createdCase,
             createdLawyers: createdLawyers,
             createdParties: createdParties,
+            createdCaseLawyers: createdCaseLawyers,
             createdHearings: createdHearings,
             profileData: {
               caseNo,
