@@ -261,6 +261,24 @@ class UserParty {
       throw error;
     }
   }
+
+  /**
+   * Check if a user has access to a specific party
+   * @param {number} user_id - User ID
+   * @param {number} party_id - Party ID
+   * @returns {Promise<boolean>} True if user has access, false otherwise
+   */
+  static async checkUserAccess(user_id, party_id) {
+    try {
+      const result = await query(
+        'SELECT COUNT(*) as count FROM user_parties WHERE user_id = $1 AND party_id = $2',
+        [user_id, party_id]
+      );
+      return parseInt(result.rows[0].count) > 0;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = UserParty;

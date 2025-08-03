@@ -14,7 +14,7 @@ router.get('/', CaseController.getAllCases);
 router.get('/:id', CaseController.getCaseById);
 
 // Create new case
-router.post('/', CaseController.createCase);
+router.post('/', authMiddleware,CaseController.createCase);
 
 // Update case
 router.put('/:id', CaseController.updateCase);

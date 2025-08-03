@@ -261,6 +261,24 @@ class UserLawyer {
       throw error;
     }
   }
+
+  /**
+   * Check if a user has access to a specific lawyer
+   * @param {number} user_id - User ID
+   * @param {number} lawyer_id - Lawyer ID
+   * @returns {Promise<boolean>} True if user has access, false otherwise
+   */
+  static async checkUserAccess(user_id, lawyer_id) {
+    try {
+      const result = await query(
+        'SELECT COUNT(*) as count FROM user_lawyers WHERE user_id = $1 AND lawyer_id = $2',
+        [user_id, lawyer_id]
+      );
+      return parseInt(result.rows[0].count) > 0;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = UserLawyer;
