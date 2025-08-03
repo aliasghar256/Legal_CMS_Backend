@@ -20,7 +20,7 @@ class CourtSearchController {
 
       // Prepare form data for the external API
       const formData = new URLSearchParams();
-      formData.append('_token', 'GMqEvs46v2PUrZOKICuoXNU1h76Wquf5WKADJ4l6'); // This might need to be dynamic
+      formData.append('_token', 'AGIlWklGlAnq3cbtWwt1ejxJDi8mzKDpZWt567TZ'); // This might need to be dynamic
       formData.append('district', district);
       formData.append('caseno', caseno);
       formData.append('caseyear', caseyear);
@@ -44,7 +44,7 @@ class CourtSearchController {
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': 'XSRF-TOKEN=eyJpdiI6IlVVWGZJMDhhZ2NCdnZhYmVOamYrMXc9PSIsInZhbHVlIjoiNFlJSXltVU14MWI0cHF5L1B1RTdTV1JOQUV5am1hQmpCcU1uZWQ0cTJlRGdlYWIyN1RlWU5GcVFjcnoxM0NQcXZPdzIwUWdHSHZrZFdHa05BVHZJQ2VZekZtaWFkbEtiQ1J4VmVuejcxMTIvUWdqMkEraVF3bStzU0hWVnJBTXgiLCJtYWMiOiIwNTEwZDdlMmVlZDExZDAxYmMxNGY2YWVhM2RkOWU1YTczNjNjZTNhNGM0YWYyYjc2YzZkZDc3YmZhOWFjMmFmIiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6IlNPUVlnL3djV2pwNzAycHBpRWNIakE9PSIsInZhbHVlIjoicTJ3R05yeG52S2dHU2Rrb29wK2xxRVArSHNzUVBHYkV2TzJXL25JZEdEVjZPUElERHNzMG5DZUg5QUJmN2xiUkwrbE5SMEFXYUJsaHRjL0F1WUFXdlQ2L0Y4REZaOWswNkNQczY2NExJMGRiMnhzWS91NkdTVVNuY1U2QTc2SEciLCJtYWMiOiJkMTcwNjdlYTg0NzA4MzAwYWQ2MzZiZGZkMTdiN2I5NTBhZWY3NzlhZWU4NmVkN2JkMDUwMTBmYTYzZWM1OWZhIiwidGFnIjoiIn0%3D'
+          'Cookie': 'XSRF-TOKEN=eyJpdiI6ImZIeUxTK002MkxaeXNwdUl0dFhRVkE9PSIsInZhbHVlIjoidVFyNnFVNEJoK2F5NVFDOGx2ekc0WVFra3J3S2t4bVNjaEtlSC9DNVBLWDNPQmlsbTJpVzBDZUdqeVpVMUFJN2wxQVQ5UE8xalErUVZ5UERlMzhtUjZ2Zy9GMWZBUXRYY3lKQkY1SDVjL0QrQkVBWlRXY2tLOEZJdVhTbVZEV2IiLCJtYWMiOiI1MTM2ZTJlMzU5MTZmODM5YTdhMjAyNWM5ZGZjMDI0NjAwZTkwN2IyODJkN2QyZjdlZmFhOGJmZjQ5NmVhMDFlIiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6InBZWFBDbytSOVRTZ29JbXRmRmpheUE9PSIsInZhbHVlIjoiSW51Z1pLaEJRMnpaRnYwRGp6eGZDdm5YNHRvVUc2dTBMbU53Q1dIdzFQbnVpMmFFR2o1SGRrUkpJUWVkQWtRa2s3aDJNb25JZnJybGVXYy9rVnVrdHZrUmk5STBINitYcmNYQVRRQWNLY3FUdTJJYzlQekNHZ2ptUllwcXo2dGkiLCJtYWMiOiIyNmJjZGM1ZDBhMGQ0NjYxYTBiNDA3NDNiOTNjMzc0YTE3MWMzYmZlZWNmOWVmYTIzMGRjNjZhYjAyMDg2OWE2IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754208990$o1$g1$t1754209033$j17$l0$h0'
         },
         timeout: 30000 // 30 second timeout
       });
@@ -102,6 +102,7 @@ class CourtSearchController {
     const $ = cheerio.load(htmlData);
     
     const cases = [];
+    const seenCaseCodes = new Set(); // Track duplicate case codes
     
     // Find the table with search results
     $('table.table-striped tbody tr').each((index, element) => {
@@ -109,13 +110,21 @@ class CourtSearchController {
       const cells = $row.find('td');
       
       if (cells.length >= 6) {
+        const caseCode = $row.find('button.pview').attr('id') || null;
+        
+        // Skip if we've already seen this case code (duplicate handling)
+        if (caseCode && seenCaseCodes.has(caseCode)) {
+          console.log(`Skipping duplicate case with code: ${caseCode}`);
+          return; // Skip this iteration
+        }
+        
         const caseData = {
           serialNumber: $(cells[0]).text().trim(),
           caseDetails: $(cells[1]).text().trim(),
           courtName: $(cells[2]).text().trim(),
           status: $(cells[3]).text().trim(),
           hearingDate: $(cells[4]).text().trim(),
-          caseCode: $row.find('button.pview').attr('id') || null
+          caseCode: caseCode
         };
         
         // Parse case details to extract case number, year, type, and parties
@@ -135,13 +144,19 @@ class CourtSearchController {
           }
         }
         
+        // Add case code to seen set to prevent duplicates
+        if (caseCode) {
+          seenCaseCodes.add(caseCode);
+        }
+        
         cases.push(caseData);
       }
     });
     
     return {
       totalResults: cases.length,
-      cases: cases
+      cases: cases,
+      duplicatesRemoved: seenCaseCodes.size < cases.length + seenCaseCodes.size
     };
   }
 
@@ -159,7 +174,7 @@ class CourtSearchController {
 
       // Prepare form data for case profile request
       const formData = new URLSearchParams();
-      formData.append('_token', 'GMqEvs46v2PUrZOKICuoXNU1h76Wquf5WKADJ4l6');
+      formData.append('_token', 'AGIlWklGlAnq3cbtWwt1ejxJDi8mzKDpZWt567TZ');
       formData.append('casecode', caseCode);
 
       // Make request to get case profile
@@ -170,7 +185,7 @@ class CourtSearchController {
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': 'XSRF-TOKEN=eyJpdiI6IkJNY3phTDZFR0wrK01yWWlmMnhuMnc9PSIsInZhbHVlIjoiTzM4VllvK2ZUUVc0a2ZncTRkV2pJNG9XT1JmRTlscmZFUFRnYmpYTktWZGRuTy9QZFhnQkMzMXB1YzI5anlBY0I2Tm9oNXZMVjI1QWxhK0pKQjFzNkQ2MGlIellvUTZyeEpIanVRVDNSOTU0RGJYcUsxb0tMbGw4RytPakZ6bnEiLCJtYWMiOiIwOTM0ZGUxOTdmN2I4ZDRkOWU4N2I3ZTQwMzgxNTg3MTRmYzI4YzIxZWYxZWRiM2QyNGI1MGM4NTUzYzEyMjA5IiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6InBmM2RCSVRvdktDRWhseGcrai8zcFE9PSIsInZhbHVlIjoiY3VMMGtzUEdoYzlwNE1TU1RyNGlQSkMxek9PcmNDdGdhMVd3Q09DRnB3dTlBZWVqcHRTQkl0Z2JQa3NZS3Z2c08rTG5lb3UveU9lMVRlakQ1MUl3TWlpNjZBNWN0RWlRaHRkanBzQVo3bU12QmZjaTRuVm5XMjYxUWgrNTQ5MHIiLCJtYWMiOiJjNTgyMzlhYzIzNWZlYWExZDhjNDM4NzhiY2RjMzg5MDliNjVkMGM0OGU5YTc1ZThkMjUwNTk2YjMyYTRiOTcwIiwidGFnIjoiIn0%3D'
+          'Cookie': 'XSRF-TOKEN=eyJpdiI6ImZIeUxTK002MkxaeXNwdUl0dFhRVkE9PSIsInZhbHVlIjoidVFyNnFVNEJoK2F5NVFDOGx2ekc0WVFra3J3S2t4bVNjaEtlSC9DNVBLWDNPQmlsbTJpVzBDZUdqeVpVMUFJN2wxQVQ5UE8xalErUVZ5UERlMzhtUjZ2Zy9GMWZBUXRYY3lKQkY1SDVjL0QrQkVBWlRXY2tLOEZJdVhTbVZEV2IiLCJtYWMiOiI1MTM2ZTJlMzU5MTZmODM5YTdhMjAyNWM5ZGZjMDI0NjAwZTkwN2IyODJkN2QyZjdlZmFhOGJmZjQ5NmVhMDFlIiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6InBZWFBDbytSOVRTZ29JbXRmRmpheUE9PSIsInZhbHVlIjoiSW51Z1pLaEJRMnpaRnYwRGp6eGZDdm5YNHRvVUc2dTBMbU53Q1dIdzFQbnVpMmFFR2o1SGRrUkpJUWVkQWtRa2s3aDJNb25JZnJybGVXYy9rVnVrdHZrUmk5STBINitYcmNYQVRRQWNLY3FUdTJJYzlQekNHZ2ptUllwcXo2dGkiLCJtYWMiOiIyNmJjZGM1ZDBhMGQ0NjYxYTBiNDA3NDNiOTNjMzc0YTE3MWMzYmZlZWNmOWVmYTIzMGRjNjZhYjAyMDg2OWE2IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754208990$o1$g1$t1754209033$j17$l0$h0'
         },
         timeout: 15000
       });
@@ -413,6 +428,19 @@ class CourtSearchController {
           const hearingHistory = profileData.hearingHistory || [];
 
           // Prepare case data for database creation
+          // Handle next_hearing date - set to null if "NOT FOUND" or invalid date
+          let nextHearingDate = null;
+          if (caseObj.hearingDate && 
+              caseObj.hearingDate.trim() !== '' && 
+              caseObj.hearingDate.toUpperCase() !== 'NOT FOUND' &&
+              caseObj.hearingDate.toUpperCase() !== 'N/A') {
+            // Try to parse the date
+            const parsedDate = new Date(caseObj.hearingDate);
+            if (!isNaN(parsedDate.getTime())) {
+              nextHearingDate = parsedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+            }
+          }
+
           const caseData = {
             cfms_case_code: parseInt(caseObj.caseCode),
             case_number: caseNo,
@@ -420,7 +448,7 @@ class CourtSearchController {
             legal_section: underSection,
             case_type: caseObj.caseType || null,
             status: caseObj.status || null,
-            next_hearing: caseObj.hearingDate || null,
+            next_hearing: nextHearingDate,
             filing_date: null,
             stage: null,
             description: null
@@ -450,26 +478,38 @@ class CourtSearchController {
           // Create Advocate 1
           if (advocate1 && advocate1.trim()) {
             try {
-              const lawyer1 = await Lawyer.create({
-                name: advocate1.trim(),
-                license_no: null,
-                contact_info: null
-              });
-              createdLawyers.push(lawyer1);
+              // Check if lawyer already exists with this name
+              const existingLawyer1 = await Lawyer.findByName(advocate1.trim());
+              if (existingLawyer1) {
+                createdLawyers.push(existingLawyer1);
+              } else {
+                const lawyer1 = await Lawyer.create({
+                  name: advocate1.trim(),
+                  license_no: null,
+                  contact_info: null
+                });
+                createdLawyers.push(lawyer1);
+              }
             } catch (error) {
               console.error(`Error creating Advocate 1 for case ${caseObj.caseCode}:`, error);
             }
           }
 
           // Create Advocate 2 if exists
-          if (advocate2 && advocate2.trim()) {
+          if (advocate2 && advocate2.trim() && advocate2.trim() !== advocate1.trim()) {
             try {
-              const lawyer2 = await Lawyer.create({
-                name: advocate2.trim(),
-                license_no: null,
-                contact_info: null
-              });
-              createdLawyers.push(lawyer2);
+              // Check if lawyer already exists with this name
+              const existingLawyer2 = await Lawyer.findByName(advocate2.trim());
+              if (existingLawyer2) {
+                createdLawyers.push(existingLawyer2);
+              } else {
+                const lawyer2 = await Lawyer.create({
+                  name: advocate2.trim(),
+                  license_no: null,
+                  contact_info: null
+                });
+                createdLawyers.push(lawyer2);
+              }
             } catch (error) {
               console.error(`Error creating Advocate 2 for case ${caseObj.caseCode}:`, error);
             }
@@ -484,13 +524,19 @@ class CourtSearchController {
             for (const partyName of partiesArray) {
               if (partyName) {
                 try {
-                  const party = await Party.create({
-                    name: partyName,
-                    cnic: null,
-                    role: null,
-                    contact_info: null
-                  });
-                  createdParties.push(party);
+                  // Check if party already exists with this name
+                  const existingParty = await Party.findByName(partyName);
+                  if (existingParty) {
+                    createdParties.push(existingParty);
+                  } else {
+                    const party = await Party.create({
+                      name: partyName,
+                      cnic: null,
+                      role: null,
+                      contact_info: null
+                    });
+                    createdParties.push(party);
+                  }
                 } catch (error) {
                   console.error(`Error creating party "${partyName}" for case ${caseObj.caseCode}:`, error);
                 }
@@ -602,7 +648,7 @@ class CourtSearchController {
     try {
       // Prepare form data for case profile request
       const formData = new URLSearchParams();
-      formData.append('_token', 'GMqEvs46v2PUrZOKICuoXNU1h76Wquf5WKADJ4l6');
+      formData.append('_token', 'AGIlWklGlAnq3cbtWwt1ejxJDi8mzKDpZWt567TZ');
       formData.append('casecode', caseCode);
 
       // Make request to get case profile
@@ -613,7 +659,7 @@ class CourtSearchController {
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': 'XSRF-TOKEN=eyJpdiI6IkJNY3phTDZFR0wrK01yWWlmMnhuMnc9PSIsInZhbHVlIjoiTzM4VllvK2ZUUVc0a2ZncTRkV2pJNG9XT1JmRTlscmZFUFRnYmpYTktWZGRuTy9QZFhnQkMzMXB1YzI5anlBY0I2Tm9oNXZMVjI1QWxhK0pKQjFzNkQ2MGlIellvUTZyeEpIanVRVDNSOTU0RGJYcUsxb0tMbGw4RytPakZ6bnEiLCJtYWMiOiIwOTM0ZGUxOTdmN2I4ZDRkOWU4N2I3ZTQwMzgxNTg3MTRmYzI4YzIxZWYxZWRiM2QyNGI1MGM4NTUzYzEyMjA5IiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6InBmM2RCSVRvdktDRWhseGcrai8zcFE9PSIsInZhbHVlIjoiY3VMMGtzUEdoYzlwNE1TU1RyNGlQSkMxek9PcmNDdGdhMVd3Q09DRnB3dTlBZWVqcHRTQkl0Z2JQa3NZS3Z2c08rTG5lb3UveU9lMVRlakQ1MUl3TWlpNjZBNWN0RWlRaHRkanBzQVo3bU12QmZjaTRuVm5XMjYxUWgrNTQ5MHIiLCJtYWMiOiJjNTgyMzlhYzIzNWZlYWExZDhjNDM4NzhiY2RjMzg5MDliNjVkMGM0OGU5YTc1ZThkMjUwNTk2YjMyYTRiOTcwIiwidGFnIjoiIn0%3D'
+          'Cookie': 'XSRF-TOKEN=eyJpdiI6ImZIeUxTK002MkxaeXNwdUl0dFhRVkE9PSIsInZhbHVlIjoidVFyNnFVNEJoK2F5NVFDOGx2ekc0WVFra3J3S2t4bVNjaEtlSC9DNVBLWDNPQmlsbTJpVzBDZUdqeVpVMUFJN2wxQVQ5UE8xalErUVZ5UERlMzhtUjZ2Zy9GMWZBUXRYY3lKQkY1SDVjL0QrQkVBWlRXY2tLOEZJdVhTbVZEV2IiLCJtYWMiOiI1MTM2ZTJlMzU5MTZmODM5YTdhMjAyNWM5ZGZjMDI0NjAwZTkwN2IyODJkN2QyZjdlZmFhOGJmZjQ5NmVhMDFlIiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6InBZWFBDbytSOVRTZ29JbXRmRmpheUE9PSIsInZhbHVlIjoiSW51Z1pLaEJRMnpaRnYwRGp6eGZDdm5YNHRvVUc2dTBMbU53Q1dIdzFQbnVpMmFFR2o1SGRrUkpJUWVkQWtRa2s3aDJNb25JZnJybGVXYy9rVnVrdHZrUmk5STBINitYcmNYQVRRQWNLY3FUdTJJYzlQekNHZ2ptUllwcXo2dGkiLCJtYWMiOiIyNmJjZGM1ZDBhMGQ0NjYxYTBiNDA3NDNiOTNjMzc0YTE3MWMzYmZlZWNmOWVmYTIzMGRjNjZhYjAyMDg2OWE2IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754208990$o1$g1$t1754209033$j17$l0$h0'
         },
         timeout: 15000
       });
