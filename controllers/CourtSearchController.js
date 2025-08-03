@@ -20,7 +20,7 @@ class CourtSearchController {
 
       // Prepare form data for the external API
       const formData = new URLSearchParams();
-      formData.append('_token', 'AGIlWklGlAnq3cbtWwt1ejxJDi8mzKDpZWt567TZ'); // This might need to be dynamic
+      formData.append('_token', 'nLhJF8VFV3IHRpsW6bc0TviaWX6l5yhJktAuwYZy'); // This might need to be dynamic
       formData.append('district', district);
       formData.append('caseno', caseno);
       formData.append('caseyear', caseyear);
@@ -44,7 +44,7 @@ class CourtSearchController {
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': 'XSRF-TOKEN=eyJpdiI6ImZIeUxTK002MkxaeXNwdUl0dFhRVkE9PSIsInZhbHVlIjoidVFyNnFVNEJoK2F5NVFDOGx2ekc0WVFra3J3S2t4bVNjaEtlSC9DNVBLWDNPQmlsbTJpVzBDZUdqeVpVMUFJN2wxQVQ5UE8xalErUVZ5UERlMzhtUjZ2Zy9GMWZBUXRYY3lKQkY1SDVjL0QrQkVBWlRXY2tLOEZJdVhTbVZEV2IiLCJtYWMiOiI1MTM2ZTJlMzU5MTZmODM5YTdhMjAyNWM5ZGZjMDI0NjAwZTkwN2IyODJkN2QyZjdlZmFhOGJmZjQ5NmVhMDFlIiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6InBZWFBDbytSOVRTZ29JbXRmRmpheUE9PSIsInZhbHVlIjoiSW51Z1pLaEJRMnpaRnYwRGp6eGZDdm5YNHRvVUc2dTBMbU53Q1dIdzFQbnVpMmFFR2o1SGRrUkpJUWVkQWtRa2s3aDJNb25JZnJybGVXYy9rVnVrdHZrUmk5STBINitYcmNYQVRRQWNLY3FUdTJJYzlQekNHZ2ptUllwcXo2dGkiLCJtYWMiOiIyNmJjZGM1ZDBhMGQ0NjYxYTBiNDA3NDNiOTNjMzc0YTE3MWMzYmZlZWNmOWVmYTIzMGRjNjZhYjAyMDg2OWE2IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754208990$o1$g1$t1754209033$j17$l0$h0'
+          'Cookie': 'XSRF-TOKEN=eyJpdiI6Ii9JZUR2N0tiQXJIWU9zeDVGblFjREE9PSIsInZhbHVlIjoiREV2OTlsOHJKcWU4eUdIK1YxVnRrZVR3NU5La0NJd2VKOFM3dzQ2YzZxMFB3SVFMd1NxalJjTWkyelI0UDM5bUdDcm5pcmhwaXRTekFFZVZjL0o3REtoMWViL3gyMVdMZGZVNTV1d0JSMDE4RWRlYmwxcCtvcnVoMXc3bytBVHYiLCJtYWMiOiIzNmRlYjg0ZDE1NjdlMDNlM2Y2NGQzMTUyOWQxMjNlODgwNWFhM2RkNzUwMmU3Yjc0MTFkOTgxY2VlZjVkMzA5IiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6Imx2T0FLUzZpak9lSE1aRkZuQlFoUHc9PSIsInZhbHVlIjoiUmdIelN1amtjWldmZnBJMFNiV2RZdkZXRjF5OUNnQy9sS1RtRDY5SmUvdjcxb1BuZ3RVOWJtTE53aGdDRC83QXFYKzJHWklmVlhnSjhZMXRTVHE3UmRRallUVzRsbXdsVzN1UDlEQmMyVXg1ZlIySUkrYlFzS05TZTNIQzd5OFciLCJtYWMiOiIxNTFlYWE2YjNhYTk5MDkwNTg1MjFhZmY4YmMzYTkwYzBkMzE2NTU1OWUzZWMxMmFhODJmOWIxZTlkZmFhNzc1IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0'
         },
         timeout: 30000 // 30 second timeout
       });
@@ -174,7 +174,7 @@ class CourtSearchController {
 
       // Prepare form data for case profile request
       const formData = new URLSearchParams();
-      formData.append('_token', 'AGIlWklGlAnq3cbtWwt1ejxJDi8mzKDpZWt567TZ');
+      formData.append('_token', 'nLhJF8VFV3IHRpsW6bc0TviaWX6l5yhJktAuwYZy');
       formData.append('casecode', caseCode);
 
       // Make request to get case profile
@@ -185,7 +185,7 @@ class CourtSearchController {
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': 'XSRF-TOKEN=eyJpdiI6ImZIeUxTK002MkxaeXNwdUl0dFhRVkE9PSIsInZhbHVlIjoidVFyNnFVNEJoK2F5NVFDOGx2ekc0WVFra3J3S2t4bVNjaEtlSC9DNVBLWDNPQmlsbTJpVzBDZUdqeVpVMUFJN2wxQVQ5UE8xalErUVZ5UERlMzhtUjZ2Zy9GMWZBUXRYY3lKQkY1SDVjL0QrQkVBWlRXY2tLOEZJdVhTbVZEV2IiLCJtYWMiOiI1MTM2ZTJlMzU5MTZmODM5YTdhMjAyNWM5ZGZjMDI0NjAwZTkwN2IyODJkN2QyZjdlZmFhOGJmZjQ5NmVhMDFlIiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6InBZWFBDbytSOVRTZ29JbXRmRmpheUE9PSIsInZhbHVlIjoiSW51Z1pLaEJRMnpaRnYwRGp6eGZDdm5YNHRvVUc2dTBMbU53Q1dIdzFQbnVpMmFFR2o1SGRrUkpJUWVkQWtRa2s3aDJNb25JZnJybGVXYy9rVnVrdHZrUmk5STBINitYcmNYQVRRQWNLY3FUdTJJYzlQekNHZ2ptUllwcXo2dGkiLCJtYWMiOiIyNmJjZGM1ZDBhMGQ0NjYxYTBiNDA3NDNiOTNjMzc0YTE3MWMzYmZlZWNmOWVmYTIzMGRjNjZhYjAyMDg2OWE2IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754208990$o1$g1$t1754209033$j17$l0$h0'
+          'Cookie': 'XSRF-TOKEN=eyJpdiI6Ii9JZUR2N0tiQXJIWU9zeDVGblFjREE9PSIsInZhbHVlIjoiREV2OTlsOHJKcWU4eUdIK1YxVnRrZVR3NU5La0NJd2VKOFM3dzQ2YzZxMFB3SVFMd1NxalJjTWkyelI0UDM5bUdDcm5pcmhwaXRTekFFZVZjL0o3REtoMWViL3gyMVdMZGZVNTV1d0JSMDE4RWRlYmwxcCtvcnVoMXc3bytBVHYiLCJtYWMiOiIzNmRlYjg0ZDE1NjdlMDNlM2Y2NGQzMTUyOWQxMjNlODgwNWFhM2RkNzUwMmU3Yjc0MTFkOTgxY2VlZjVkMzA5IiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6Imx2T0FLUzZpak9lSE1aRkZuQlFoUHc9PSIsInZhbHVlIjoiUmdIelN1amtjWldmZnBJMFNiV2RZdkZXRjF5OUNnQy9sS1RtRDY5SmUvdjcxb1BuZ3RVOWJtTE53aGdDRC83QXFYKzJHWklmVlhnSjhZMXRTVHE3UmRRallUVzRsbXdsVzN1UDlEQmMyVXg1ZlIySUkrYlFzS05TZTNIQzd5OFciLCJtYWMiOiIxNTFlYWE2YjNhYTk5MDkwNTg1MjFhZmY4YmMzYTkwYzBkMzE2NTU1OWUzZWMxMmFhODJmOWIxZTlkZmFhNzc1IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0'
         },
         timeout: 15000
       });
@@ -388,6 +388,8 @@ class CourtSearchController {
       const Party = require('../models/Party');
       const Hearing = require('../models/Hearing');
       const CaseLawyer = require('../models/CaseLawyer');
+      const UserLawyer = require('../models/UserLawyer');
+      const UserParty = require('../models/UserParty');
       
       const results = {
         successful: [],
@@ -402,11 +404,9 @@ class CourtSearchController {
       // Process each case
       for (let i = 0; i < cases.length; i++) {
         const caseObj = cases[i];
-        
         try {
           // Get case profile using the same logic as getCaseProfile
           const profileData = await CourtSearchController.getCaseProfileData(caseObj.caseCode);
-          
           if (!profileData) {
             results.failed.push({
               index: i,
@@ -428,16 +428,14 @@ class CourtSearchController {
           const hearingHistory = profileData.hearingHistory || [];
 
           // Prepare case data for database creation
-          // Handle next_hearing date - set to null if "NOT FOUND" or invalid date
           let nextHearingDate = null;
           if (caseObj.hearingDate && 
               caseObj.hearingDate.trim() !== '' && 
               caseObj.hearingDate.toUpperCase() !== 'NOT FOUND' &&
               caseObj.hearingDate.toUpperCase() !== 'N/A') {
-            // Try to parse the date
             const parsedDate = new Date(caseObj.hearingDate);
             if (!isNaN(parsedDate.getTime())) {
-              nextHearingDate = parsedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+              nextHearingDate = parsedDate.toISOString().split('T')[0];
             }
           }
 
@@ -454,9 +452,8 @@ class CourtSearchController {
             description: null
           };
 
-          // Check if case already exists with this CFMS code
+          // Check if case already exists
           const existingCase = await Case.findByCfmsCaseCode(caseData.cfms_case_code);
-          
           if (existingCase) {
             results.failed.push({
               index: i,
@@ -468,74 +465,117 @@ class CourtSearchController {
             continue;
           }
 
-          // Create the case in database
+          // Create the case
           const createdCase = await Case.create(caseData);
           const caseId = createdCase.case_id;
 
           // Create lawyers
           const createdLawyers = [];
-          
-          // Create Advocate 1
           if (advocate1 && advocate1.trim()) {
             try {
-              // Check if lawyer already exists with this name
-              const existingLawyer1 = await Lawyer.findByName(advocate1.trim());
-              if (existingLawyer1) {
-                createdLawyers.push(existingLawyer1);
-              } else {
-                const lawyer1 = await Lawyer.create({
+              // First try to find existing lawyer by exact name match
+              const existingLawyers = await Lawyer.findByName(advocate1.trim());
+              let lawyer1 = existingLawyers.find(l => l.name.toLowerCase() === advocate1.trim().toLowerCase());
+              
+              if (!lawyer1) {
+                lawyer1 = await Lawyer.create({
                   name: advocate1.trim(),
                   license_no: null,
                   contact_info: null
                 });
+              }
+              
+              if (lawyer1 && lawyer1.lawyer_id) {
                 createdLawyers.push(lawyer1);
+                
+                // Create UserLawyer relationship
+                try {
+                  await UserLawyer.create({
+                    user_id: userId,
+                    lawyer_id: lawyer1.lawyer_id
+                  });
+                } catch (error) {
+                  // Ignore if relationship already exists
+                  if (!error.message.includes('already exists')) {
+                    console.error(`Error creating user-lawyer relationship for ${advocate1}:`, error);
+                  }
+                }
               }
             } catch (error) {
               console.error(`Error creating Advocate 1 for case ${caseObj.caseCode}:`, error);
             }
           }
 
-          // Create Advocate 2 if exists
           if (advocate2 && advocate2.trim() && advocate2.trim() !== advocate1.trim()) {
             try {
-              // Check if lawyer already exists with this name
-              const existingLawyer2 = await Lawyer.findByName(advocate2.trim());
-              if (existingLawyer2) {
-                createdLawyers.push(existingLawyer2);
-              } else {
-                const lawyer2 = await Lawyer.create({
+              // First try to find existing lawyer by exact name match
+              const existingLawyers = await Lawyer.findByName(advocate2.trim());
+              let lawyer2 = existingLawyers.find(l => l.name.toLowerCase() === advocate2.trim().toLowerCase());
+              
+              if (!lawyer2) {
+                lawyer2 = await Lawyer.create({
                   name: advocate2.trim(),
                   license_no: null,
                   contact_info: null
                 });
+              }
+              
+              if (lawyer2 && lawyer2.lawyer_id) {
                 createdLawyers.push(lawyer2);
+                
+                // Create UserLawyer relationship
+                try {
+                  await UserLawyer.create({
+                    user_id: userId,
+                    lawyer_id: lawyer2.lawyer_id
+                  });
+                } catch (error) {
+                  // Ignore if relationship already exists
+                  if (!error.message.includes('already exists')) {
+                    console.error(`Error creating user-lawyer relationship for ${advocate2}:`, error);
+                  }
+                }
               }
             } catch (error) {
               console.error(`Error creating Advocate 2 for case ${caseObj.caseCode}:`, error);
             }
           }
 
-          // Create parties from the parties string using 'V/S' as delimiter
+          // Create parties
           const createdParties = [];
-          
           if (parties && parties.trim()) {
             const partiesArray = parties.split(/\s+V\/S\s+/i).map(p => p.trim()).filter(p => p);
-            
             for (const partyName of partiesArray) {
               if (partyName) {
                 try {
-                  // Check if party already exists with this name
-                  const existingParty = await Party.findByName(partyName);
-                  if (existingParty) {
-                    createdParties.push(existingParty);
-                  } else {
-                    const party = await Party.create({
+                  // First try to find existing party by exact name match
+                  const existingParties = await Party.findByName(partyName);
+                  let party = existingParties.find(p => p.name.toLowerCase() === partyName.toLowerCase());
+                  
+                  if (!party) {
+                    party = await Party.create({
                       name: partyName,
                       cnic: null,
                       role: null,
                       contact_info: null
                     });
+                  }
+                  
+                  if (party && party.party_id) {
                     createdParties.push(party);
+                    
+                    // Create UserParty relationship
+                    try {
+                      await UserParty.create({
+                        user_id: userId,
+                        party_id: party.party_id
+                      });
+                    } catch (error) {
+                      // Ignore if relationship already exists
+                      if (!error.message.includes('already exists')) {
+                        console.error(`Error creating user-party relationship for ${partyName}:`, error);
+                      }
+                    }
                   }
                 } catch (error) {
                   console.error(`Error creating party "${partyName}" for case ${caseObj.caseCode}:`, error);
@@ -546,37 +586,38 @@ class CourtSearchController {
 
           // Create case_lawyers relationships
           const createdCaseLawyers = [];
-          
-          // Create relationships for each lawyer with each party
-          for (const lawyer of createdLawyers) {
-            for (const party of createdParties) {
-              try {
-                const caseLawyerRelation = await CaseLawyer.create({
-                  case_id: caseId,
-                  lawyer_id: lawyer.lawyer_id,
-                  party_id: party.party_id,
-                  user_id: userId
-                });
-                createdCaseLawyers.push(caseLawyerRelation);
-              } catch (error) {
-                console.error(`Error creating case-lawyer relationship for case ${caseObj.caseCode}:`, error);
+          if (createdLawyers.length > 0 && createdParties.length > 0) {
+            for (const lawyer of createdLawyers) {
+              if (!lawyer || !lawyer.lawyer_id) continue;
+              for (const party of createdParties) {
+                if (!party || !party.party_id) continue;
+                try {
+                  const caseLawyerRelation = await CaseLawyer.create({
+                    case_id: caseId,
+                    lawyer_id: lawyer.lawyer_id,
+                    party_id: party.party_id,
+                    user_id: userId
+                  });
+                  createdCaseLawyers.push(caseLawyerRelation);
+                } catch (error) {
+                  console.error(`Error creating case-lawyer relationship for case ${caseObj.caseCode} (lawyer: ${lawyer.lawyer_id}, party: ${party.party_id}):`, error);
+                }
               }
             }
+          } else {
+            console.log(`No lawyers or parties to create relationships for case ${caseObj.caseCode}. Lawyers: ${createdLawyers.length}, Parties: ${createdParties.length}`);
           }
 
-          // Create hearings from hearing history
+          // Create hearings
           const createdHearings = [];
-          
           for (const hearingEntry of hearingHistory) {
             if (hearingEntry.date && hearingEntry.diary) {
               try {
-                // Parse date from various formats
                 let hearingDate = null;
                 if (hearingEntry.date) {
-                  // Try to parse the date - it might be in different formats
                   const parsedDate = new Date(hearingEntry.date);
                   if (!isNaN(parsedDate.getTime())) {
-                    hearingDate = parsedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+                    hearingDate = parsedDate.toISOString().split('T')[0];
                   }
                 }
 
@@ -612,9 +653,17 @@ class CourtSearchController {
               advocate1,
               advocate2,
               hearingHistoryCount: hearingHistory.length
+            },
+            summary: {
+              lawyersCreated: createdLawyers.length,
+              partiesCreated: createdParties.length,
+              caseLawyersCreated: createdCaseLawyers.length,
+              hearingsCreated: createdHearings.length
             }
           });
           results.summary.created++;
+          
+          console.log(`Successfully processed case ${caseObj.caseCode}: ${createdLawyers.length} lawyers, ${createdParties.length} parties, ${createdCaseLawyers.length} relationships, ${createdHearings.length} hearings`);
 
         } catch (error) {
           console.error(`Error processing case at index ${i}:`, error);
@@ -648,7 +697,7 @@ class CourtSearchController {
     try {
       // Prepare form data for case profile request
       const formData = new URLSearchParams();
-      formData.append('_token', 'AGIlWklGlAnq3cbtWwt1ejxJDi8mzKDpZWt567TZ');
+      formData.append('_token', 'nLhJF8VFV3IHRpsW6bc0TviaWX6l5yhJktAuwYZy');
       formData.append('casecode', caseCode);
 
       // Make request to get case profile
@@ -659,7 +708,7 @@ class CourtSearchController {
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': 'XSRF-TOKEN=eyJpdiI6ImZIeUxTK002MkxaeXNwdUl0dFhRVkE9PSIsInZhbHVlIjoidVFyNnFVNEJoK2F5NVFDOGx2ekc0WVFra3J3S2t4bVNjaEtlSC9DNVBLWDNPQmlsbTJpVzBDZUdqeVpVMUFJN2wxQVQ5UE8xalErUVZ5UERlMzhtUjZ2Zy9GMWZBUXRYY3lKQkY1SDVjL0QrQkVBWlRXY2tLOEZJdVhTbVZEV2IiLCJtYWMiOiI1MTM2ZTJlMzU5MTZmODM5YTdhMjAyNWM5ZGZjMDI0NjAwZTkwN2IyODJkN2QyZjdlZmFhOGJmZjQ5NmVhMDFlIiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6InBZWFBDbytSOVRTZ29JbXRmRmpheUE9PSIsInZhbHVlIjoiSW51Z1pLaEJRMnpaRnYwRGp6eGZDdm5YNHRvVUc2dTBMbU53Q1dIdzFQbnVpMmFFR2o1SGRrUkpJUWVkQWtRa2s3aDJNb25JZnJybGVXYy9rVnVrdHZrUmk5STBINitYcmNYQVRRQWNLY3FUdTJJYzlQekNHZ2ptUllwcXo2dGkiLCJtYWMiOiIyNmJjZGM1ZDBhMGQ0NjYxYTBiNDA3NDNiOTNjMzc0YTE3MWMzYmZlZWNmOWVmYTIzMGRjNjZhYjAyMDg2OWE2IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754208990$o1$g1$t1754209033$j17$l0$h0'
+          'Cookie': 'XSRF-TOKEN=eyJpdiI6Ii9JZUR2N0tiQXJIWU9zeDVGblFjREE9PSIsInZhbHVlIjoiREV2OTlsOHJKcWU4eUdIK1YxVnRrZVR3NU5La0NJd2VKOFM3dzQ2YzZxMFB3SVFMd1NxalJjTWkyelI0UDM5bUdDcm5pcmhwaXRTekFFZVZjL0o3REtoMWViL3gyMVdMZGZVNTV1d0JSMDE4RWRlYmwxcCtvcnVoMXc3bytBVHYiLCJtYWMiOiIzNmRlYjg0ZDE1NjdlMDNlM2Y2NGQzMTUyOWQxMjNlODgwNWFhM2RkNzUwMmU3Yjc0MTFkOTgxY2VlZjVkMzA5IiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6Imx2T0FLUzZpak9lSE1aRkZuQlFoUHc9PSIsInZhbHVlIjoiUmdIelN1amtjWldmZnBJMFNiV2RZdkZXRjF5OUNnQy9sS1RtRDY5SmUvdjcxb1BuZ3RVOWJtTE53aGdDRC83QXFYKzJHWklmVlhnSjhZMXRTVHE3UmRRallUVzRsbXdsVzN1UDlEQmMyVXg1ZlIySUkrYlFzS05TZTNIQzd5OFciLCJtYWMiOiIxNTFlYWE2YjNhYTk5MDkwNTg1MjFhZmY4YmMzYTkwYzBkMzE2NTU1OWUzZWMxMmFhODJmOWIxZTlkZmFhNzc1IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0'
         },
         timeout: 15000
       });
