@@ -53,7 +53,7 @@ class Hearing {
   }
 
   /**
-   * Find hearing by ID with related data (case, judge)
+   * Find hearing by ID with related data (case, judge, lawyers, parties)
    * @param {number} hearing_id - Hearing ID
    * @returns {Promise<Object|null>} Hearing data with related information
    */
@@ -71,7 +71,57 @@ class Hearing {
          WHERE h.hearing_id = $1`,
         [hearing_id]
       );
-      return result.rows[0] || null;
+      
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const hearing = result.rows[0];
+
+      // Get lawyers and parties for this case
+      if (hearing.case_id) {
+        const lawyersPartiesResult = await query(
+          `SELECT l.lawyer_id, l.name as lawyer_name, l.license_no,
+                  p.party_id, p.name as party_name, p.role, p.cnic
+           FROM case_lawyers cl
+           LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+           LEFT JOIN parties p ON cl.party_id = p.party_id
+           WHERE cl.case_id = $1`,
+          [hearing.case_id]
+        );
+
+        // Group lawyers and parties
+        const lawyers = [];
+        const parties = [];
+        const lawyerMap = new Map();
+        const partyMap = new Map();
+
+        for (let row of lawyersPartiesResult.rows) {
+          if (row.lawyer_id && !lawyerMap.has(row.lawyer_id)) {
+            lawyers.push({
+              lawyer_id: row.lawyer_id,
+              name: row.lawyer_name,
+              license_no: row.license_no
+            });
+            lawyerMap.set(row.lawyer_id, true);
+          }
+          
+          if (row.party_id && !partyMap.has(row.party_id)) {
+            parties.push({
+              party_id: row.party_id,
+              name: row.party_name,
+              role: row.role,
+              cnic: row.cnic
+            });
+            partyMap.set(row.party_id, true);
+          }
+        }
+
+        hearing.lawyers = lawyers;
+        hearing.parties = parties;
+      }
+
+      return hearing;
     } catch (error) {
       throw error;
     }
@@ -273,14 +323,15 @@ class Hearing {
   }
 
   /**
-   * Get all hearings with pagination and filtering
+   * Get all hearings with pagination and filtering, optionally with lawyers and parties
    * @param {number} [limit=50] - Number of records per page
    * @param {number} [offset=0] - Number of records to skip
    * @param {string} [type] - Filter by hearing type (optional)
    * @param {number} [judge_id] - Filter by judge ID (optional)
+   * @param {boolean} [includeLawyersParties=false] - Include lawyers and parties info
    * @returns {Promise<Object>} Hearings data with pagination info
    */
-  static async findAll(limit = 50, offset = 0, type = null, judge_id = null) {
+  static async findAll(limit = 50, offset = 0, type = null, judge_id = null, includeLawyersParties = false) {
     try {
       let sql = `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.description, h.type,
                         c.case_number, c.case_type,
@@ -312,6 +363,53 @@ class Hearing {
       params.push(limit, offset);
 
       const result = await query(sql, params);
+
+      // Include lawyers and parties if requested
+      if (includeLawyersParties) {
+        for (let hearing of result.rows) {
+          if (hearing.case_id) {
+            const lawyersPartiesResult = await query(
+              `SELECT l.lawyer_id, l.name as lawyer_name, l.license_no,
+                      p.party_id, p.name as party_name, p.role, p.cnic
+               FROM case_lawyers cl
+               LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+               LEFT JOIN parties p ON cl.party_id = p.party_id
+               WHERE cl.case_id = $1`,
+              [hearing.case_id]
+            );
+
+            // Group lawyers and parties
+            const lawyers = [];
+            const parties = [];
+            const lawyerMap = new Map();
+            const partyMap = new Map();
+
+            for (let row of lawyersPartiesResult.rows) {
+              if (row.lawyer_id && !lawyerMap.has(row.lawyer_id)) {
+                lawyers.push({
+                  lawyer_id: row.lawyer_id,
+                  name: row.lawyer_name,
+                  license_no: row.license_no
+                });
+                lawyerMap.set(row.lawyer_id, true);
+              }
+              
+              if (row.party_id && !partyMap.has(row.party_id)) {
+                parties.push({
+                  party_id: row.party_id,
+                  name: row.party_name,
+                  role: row.role,
+                  cnic: row.cnic
+                });
+                partyMap.set(row.party_id, true);
+              }
+            }
+
+            hearing.lawyers = lawyers;
+            hearing.parties = parties;
+          }
+        }
+      }
 
       // Get total count
       let countSql = 'SELECT COUNT(*) FROM hearings h';
@@ -452,6 +550,324 @@ class Hearing {
         total_hearings: parseInt(totalResult.rows[0].count),
         todays_hearings: parseInt(todayResult.rows[0].count),
         upcoming_hearings: parseInt(upcomingResult.rows[0].count)
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get hearings for user's cases with lawyers and parties
+   * @param {Array} caseIds - Array of case IDs the user has access to
+   * @param {number} [limit=50] - Number of records per page
+   * @param {number} [offset=0] - Number of records to skip
+   * @returns {Promise<Object>} User hearings data with pagination
+   */
+  static async getUserHearings(caseIds, limit = 50, offset = 0) {
+    try {
+      if (!caseIds || caseIds.length === 0) {
+        return {
+          hearings: [],
+          pagination: {
+            limit,
+            offset,
+            total: 0,
+            hasMore: false
+          }
+        };
+      }
+
+      const placeholders = caseIds.map((_, index) => `$${index + 1}`).join(',');
+      const params = [...caseIds, limit, offset];
+
+      const result = await query(
+        `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.description, h.type,
+                c.case_number, c.case_type, c.status as case_status,
+                j.name as judge_name, j.designation as judge_designation,
+                court.name as court_name, court.location as court_location
+         FROM hearings h
+         LEFT JOIN cases c ON h.case_id = c.case_id
+         LEFT JOIN judges j ON h.judge_id = j.judge_id
+         LEFT JOIN courts court ON j.court_id = court.court_id
+         WHERE h.case_id IN (${placeholders})
+         ORDER BY h.date DESC
+         LIMIT $${caseIds.length + 1} OFFSET $${caseIds.length + 2}`,
+        params
+      );
+
+      // Get lawyers and parties for each hearing
+      for (let hearing of result.rows) {
+        // Get lawyers and parties for this case
+        const lawyersPartiesResult = await query(
+          `SELECT l.lawyer_id, l.name as lawyer_name, l.license_no,
+                  p.party_id, p.name as party_name, p.role, p.cnic
+           FROM case_lawyers cl
+           LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+           LEFT JOIN parties p ON cl.party_id = p.party_id
+           WHERE cl.case_id = $1`,
+          [hearing.case_id]
+        );
+
+        // Group lawyers and parties
+        const lawyers = [];
+        const parties = [];
+        const lawyerMap = new Map();
+        const partyMap = new Map();
+
+        for (let row of lawyersPartiesResult.rows) {
+          if (row.lawyer_id && !lawyerMap.has(row.lawyer_id)) {
+            lawyers.push({
+              lawyer_id: row.lawyer_id,
+              name: row.lawyer_name,
+              license_no: row.license_no
+            });
+            lawyerMap.set(row.lawyer_id, true);
+          }
+          
+          if (row.party_id && !partyMap.has(row.party_id)) {
+            parties.push({
+              party_id: row.party_id,
+              name: row.party_name,
+              role: row.role,
+              cnic: row.cnic
+            });
+            partyMap.set(row.party_id, true);
+          }
+        }
+
+        hearing.lawyers = lawyers;
+        hearing.parties = parties;
+      }
+
+      // Get total count
+      const countResult = await query(
+        `SELECT COUNT(*) FROM hearings WHERE case_id IN (${placeholders})`,
+        caseIds
+      );
+      const totalHearings = parseInt(countResult.rows[0].count);
+
+      return {
+        hearings: result.rows,
+        pagination: {
+          limit,
+          offset,
+          total: totalHearings,
+          hasMore: offset + limit < totalHearings
+        }
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get upcoming hearings for user's cases with lawyers and parties
+   * @param {Array} caseIds - Array of case IDs the user has access to
+   * @param {number} [days=30] - Number of days to look ahead
+   * @param {number} [limit=50] - Number of records to return
+   * @returns {Promise<Object>} Upcoming user hearings data
+   */
+  static async getUpcomingUserHearings(caseIds, days = 30, limit = 50) {
+    try {
+      if (!caseIds || caseIds.length === 0) {
+        return {
+          hearings: [],
+          pagination: {
+            limit,
+            offset: 0,
+            total: 0,
+            hasMore: false
+          }
+        };
+      }
+
+      const placeholders = caseIds.map((_, index) => `$${index + 1}`).join(',');
+      const params = [...caseIds, limit];
+
+      const result = await query(
+        `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.description, h.type,
+                c.case_number, c.case_type, c.status as case_status,
+                j.name as judge_name, j.designation as judge_designation,
+                court.name as court_name, court.location as court_location
+         FROM hearings h
+         LEFT JOIN cases c ON h.case_id = c.case_id
+         LEFT JOIN judges j ON h.judge_id = j.judge_id
+         LEFT JOIN courts court ON j.court_id = court.court_id
+         WHERE h.case_id IN (${placeholders})
+         AND h.date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '${days} days')
+         ORDER BY h.date ASC
+         LIMIT $${caseIds.length + 1}`,
+        params
+      );
+
+      // Get lawyers and parties for each hearing
+      for (let hearing of result.rows) {
+        // Get lawyers and parties for this case
+        const lawyersPartiesResult = await query(
+          `SELECT l.lawyer_id, l.name as lawyer_name, l.license_no,
+                  p.party_id, p.name as party_name, p.role, p.cnic
+           FROM case_lawyers cl
+           LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+           LEFT JOIN parties p ON cl.party_id = p.party_id
+           WHERE cl.case_id = $1`,
+          [hearing.case_id]
+        );
+
+        // Group lawyers and parties
+        const lawyers = [];
+        const parties = [];
+        const lawyerMap = new Map();
+        const partyMap = new Map();
+
+        for (let row of lawyersPartiesResult.rows) {
+          if (row.lawyer_id && !lawyerMap.has(row.lawyer_id)) {
+            lawyers.push({
+              lawyer_id: row.lawyer_id,
+              name: row.lawyer_name,
+              license_no: row.license_no
+            });
+            lawyerMap.set(row.lawyer_id, true);
+          }
+          
+          if (row.party_id && !partyMap.has(row.party_id)) {
+            parties.push({
+              party_id: row.party_id,
+              name: row.party_name,
+              role: row.role,
+              cnic: row.cnic
+            });
+            partyMap.set(row.party_id, true);
+          }
+        }
+
+        hearing.lawyers = lawyers;
+        hearing.parties = parties;
+      }
+
+      // Get total count
+      const countResult = await query(
+        `SELECT COUNT(*) FROM hearings 
+         WHERE case_id IN (${placeholders})
+         AND date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '${days} days')`,
+        caseIds
+      );
+      const totalHearings = parseInt(countResult.rows[0].count);
+
+      return {
+        hearings: result.rows,
+        pagination: {
+          limit,
+          offset: 0,
+          total: totalHearings,
+          hasMore: limit < totalHearings
+        }
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get past hearings for user's cases with lawyers and parties
+   * @param {Array} caseIds - Array of case IDs the user has access to
+   * @param {number} [limit=50] - Number of records to return
+   * @param {number} [offset=0] - Number of records to skip
+   * @returns {Promise<Object>} Past user hearings data
+   */
+  static async getPastUserHearings(caseIds, limit = 50, offset = 0) {
+    try {
+      if (!caseIds || caseIds.length === 0) {
+        return {
+          hearings: [],
+          pagination: {
+            limit,
+            offset,
+            total: 0,
+            hasMore: false
+          }
+        };
+      }
+
+      const placeholders = caseIds.map((_, index) => `$${index + 1}`).join(',');
+      const params = [...caseIds, limit, offset];
+
+      const result = await query(
+        `SELECT h.hearing_id, h.case_id, h.judge_id, h.date, h.description, h.type,
+                c.case_number, c.case_type, c.status as case_status,
+                j.name as judge_name, j.designation as judge_designation,
+                court.name as court_name, court.location as court_location
+         FROM hearings h
+         LEFT JOIN cases c ON h.case_id = c.case_id
+         LEFT JOIN judges j ON h.judge_id = j.judge_id
+         LEFT JOIN courts court ON j.court_id = court.court_id
+         WHERE h.case_id IN (${placeholders})
+         AND h.date < CURRENT_DATE
+         ORDER BY h.date DESC
+         LIMIT $${caseIds.length + 1} OFFSET $${caseIds.length + 2}`,
+        params
+      );
+
+      // Get lawyers and parties for each hearing
+      for (let hearing of result.rows) {
+        // Get lawyers and parties for this case
+        const lawyersPartiesResult = await query(
+          `SELECT l.lawyer_id, l.name as lawyer_name, l.license_no,
+                  p.party_id, p.name as party_name, p.role, p.cnic
+           FROM case_lawyers cl
+           LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+           LEFT JOIN parties p ON cl.party_id = p.party_id
+           WHERE cl.case_id = $1`,
+          [hearing.case_id]
+        );
+
+        // Group lawyers and parties
+        const lawyers = [];
+        const parties = [];
+        const lawyerMap = new Map();
+        const partyMap = new Map();
+
+        for (let row of lawyersPartiesResult.rows) {
+          if (row.lawyer_id && !lawyerMap.has(row.lawyer_id)) {
+            lawyers.push({
+              lawyer_id: row.lawyer_id,
+              name: row.lawyer_name,
+              license_no: row.license_no
+            });
+            lawyerMap.set(row.lawyer_id, true);
+          }
+          
+          if (row.party_id && !partyMap.has(row.party_id)) {
+            parties.push({
+              party_id: row.party_id,
+              name: row.party_name,
+              role: row.role,
+              cnic: row.cnic
+            });
+            partyMap.set(row.party_id, true);
+          }
+        }
+
+        hearing.lawyers = lawyers;
+        hearing.parties = parties;
+      }
+
+      // Get total count
+      const countResult = await query(
+        `SELECT COUNT(*) FROM hearings 
+         WHERE case_id IN (${placeholders})
+         AND date < CURRENT_DATE`,
+        caseIds
+      );
+      const totalHearings = parseInt(countResult.rows[0].count);
+
+      return {
+        hearings: result.rows,
+        pagination: {
+          limit,
+          offset,
+          total: totalHearings,
+          hasMore: offset + limit < totalHearings
+        }
       };
     } catch (error) {
       throw error;

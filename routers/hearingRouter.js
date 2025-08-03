@@ -1,7 +1,23 @@
 const express = require('express');
 const HearingController = require('../controllers/HearingController');
+const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
+
+// Protected routes - require authentication
+router.use(authMiddleware);
+
+// User-specific hearing routes
+router.get('/my-hearings', HearingController.getUserHearings);
+router.get('/upcoming', HearingController.getUpcomingHearings);
+router.get('/past', HearingController.getPastHearings);
+
+// Case-specific hearing routes
+router.get('/case/:caseId', HearingController.getCaseHearingDiary);
+
+// Notification routes
+router.post('/:id/notify-parties', HearingController.notifyParties);
+router.post('/:id/notify-lawyers', HearingController.notifyLawyers);
 
 // Get all hearings
 router.get('/', HearingController.getAllHearings);
