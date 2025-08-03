@@ -1,5 +1,6 @@
 const Party = require('../models/Party');
 const UserParty = require('../models/UserParty');
+const CaseLawyer = require('../models/CaseLawyer');
 
 class PartyController {
   /**
@@ -344,6 +345,50 @@ class PartyController {
       res.status(500).json({
         success: false,
         message: 'Failed to fetch case parties',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get all cases for a specific party
+   */
+  static async getCases(req, res) {
+    try {
+      const { id } = req.params;
+      const user_id = req.user.user_id;
+
+      if (!id || isNaN(parseInt(id))) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid party ID'
+        });
+      }
+
+      const party_id = parseInt(id);
+
+      // Check if user has access to this party
+      const hasAccess = await UserParty.checkUserAccess(user_id, party_id);
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. You do not have permission to view this party\'s cases.'
+        });
+      }
+
+      // Get cases for this party
+      const cases = await CaseLawyer.getCasesByParty(party_id);
+
+      res.status(200).json({
+        success: true,
+        message: 'Party cases retrieved successfully',
+        data: { cases }
+      });
+    } catch (error) {
+      console.error('Error fetching party cases:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch party cases',
         error: error.message
       });
     }

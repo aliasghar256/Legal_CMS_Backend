@@ -1,5 +1,6 @@
 const Lawyer = require('../models/Lawyer');
 const UserLawyer = require('../models/UserLawyer');
+const CaseLawyer = require('../models/CaseLawyer');
 
 class LawyerController {
   /**
@@ -301,9 +302,7 @@ class LawyerController {
   static async getCases(req, res) {
     try {
       const { id } = req.params;
-      const page = parseInt(req.query.page) || 1;
-      const limit = parseInt(req.query.limit) || 20;
-      const offset = (page - 1) * limit;
+      const user_id = req.user.user_id;
 
       if (!id || isNaN(parseInt(id))) {
         return res.status(400).json({
@@ -312,12 +311,24 @@ class LawyerController {
         });
       }
 
-      const result = await Lawyer.getCases(parseInt(id), limit, offset);
+      const lawyer_id = parseInt(id);
+
+      // Check if user has access to this lawyer
+      const hasAccess = await UserLawyer.checkUserAccess(user_id, lawyer_id);
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. You do not have permission to view this lawyer\'s cases.'
+        });
+      }
+
+      // Get cases for this lawyer
+      const cases = await CaseLawyer.getCasesByLawyer(lawyer_id);
 
       res.status(200).json({
         success: true,
         message: 'Lawyer cases retrieved successfully',
-        data: result
+        data: { cases }
       });
     } catch (error) {
       console.error('Error fetching lawyer cases:', error);

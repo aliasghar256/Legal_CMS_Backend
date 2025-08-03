@@ -23,4 +23,7 @@ router.get('/search/name', PartyController.searchByName);
 router.get('/cnic/:cnic', PartyController.findByCnic);
 router.get('/case/:case_id', PartyController.getByCaseId);
 
+// Relationship queries
+router.get('/:id/cases', PartyController.getCases);
+
 module.exports = router;
