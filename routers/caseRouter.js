@@ -10,6 +10,9 @@ router.get('/my-cases', authMiddleware, CaseController.getUserCases);
 // Get all cases
 router.get('/', CaseController.getAllCases);
 
+// Get case by ID with full details
+router.get('/:id/details', CaseController.getCaseByIdWithDetails);
+
 // Get case by ID
 router.get('/:id', CaseController.getCaseById);
 

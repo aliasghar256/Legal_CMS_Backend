@@ -78,30 +78,32 @@ class Case {
       const caseData = await this.findById(case_id);
       if (!caseData) return null;
 
-      // Get parties
+      // Get parties through case_lawyers table
       const parties = await query(
-        `SELECT p.party_id, p.name, p.cnic, p.role, p.contact_info
+        `SELECT DISTINCT p.party_id, p.name, p.cnic, p.role, p.contact_info
          FROM parties p
-         INNER JOIN case_parties cp ON p.party_id = cp.party_id
-         WHERE cp.case_id = $1
+         INNER JOIN case_lawyers cl ON p.party_id = cl.party_id
+         WHERE cl.case_id = $1
          ORDER BY p.name`,
         [case_id]
       );
 
-      // Get lawyers
+      // Get lawyers through case_lawyers table with party information
       const lawyers = await query(
-        `SELECT l.lawyer_id, l.name, l.email, l.license_no, l.contact_info, p.name as party_name
+        `SELECT DISTINCT l.lawyer_id, l.name, l.license_no, l.contact_info,
+                STRING_AGG(DISTINCT p.name, ', ') as party_names
          FROM lawyers l
          INNER JOIN case_lawyers cl ON l.lawyer_id = cl.lawyer_id
          LEFT JOIN parties p ON cl.party_id = p.party_id
          WHERE cl.case_id = $1
+         GROUP BY l.lawyer_id, l.name, l.license_no, l.contact_info
          ORDER BY l.name`,
         [case_id]
       );
 
       // Get recent hearings
       const hearings = await query(
-        `SELECT h.hearing_id, h.judge_id, h.date, h.description, h.type, h.next_hearing_date,
+        `SELECT h.hearing_id, h.judge_id, h.date, h.description, h.type,
                 j.name as judge_name
          FROM hearings h
          LEFT JOIN judges j ON h.judge_id = j.judge_id
@@ -130,6 +132,27 @@ class Case {
         hearings: hearings.rows,
         documents: documents.rows
       };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Find parties by case ID
+   * @param {number} case_id - Case ID
+   * @returns {Promise<Array>} Array of parties associated with the case
+   */
+  static async findPartiesByCaseId(case_id) {
+    try {
+      const result = await query(
+        `SELECT DISTINCT p.party_id, p.name, p.cnic, p.role, p.contact_info
+         FROM parties p
+         INNER JOIN case_lawyers cl ON p.party_id = cl.party_id
+         WHERE cl.case_id = $1
+         ORDER BY p.name`,
+        [case_id]
+      );
+      return result.rows;
     } catch (error) {
       throw error;
     }
@@ -309,7 +332,6 @@ class Case {
     try {
       return await transaction(async (client) => {
         // Delete related records first
-        await client.query('DELETE FROM case_parties WHERE case_id = $1', [case_id]);
         await client.query('DELETE FROM case_lawyers WHERE case_id = $1', [case_id]);
         await client.query('DELETE FROM hearings WHERE case_id = $1', [case_id]);
         await client.query('DELETE FROM documents WHERE case_id = $1', [case_id]);
@@ -372,16 +394,19 @@ class Case {
   }
 
   /**
-   * Add party to case
+   * Add party to case (through case_lawyers table)
+   * Note: This requires a lawyer_id as well since the relationship is case-lawyer-party
    * @param {number} case_id - Case ID
    * @param {number} party_id - Party ID
+   * @param {number} lawyer_id - Lawyer ID
+   * @param {number} user_id - User ID
    * @returns {Promise<boolean>} True if added successfully
    */
-  static async addParty(case_id, party_id) {
+  static async addParty(case_id, party_id, lawyer_id, user_id) {
     try {
       await query(
-        'INSERT INTO case_parties (case_id, party_id) VALUES ($1, $2)',
-        [case_id, party_id]
+        'INSERT INTO case_lawyers (case_id, party_id, lawyer_id, user_id) VALUES ($1, $2, $3, $4)',
+        [case_id, party_id, lawyer_id, user_id]
       );
       return true;
     } catch (error) {
@@ -390,7 +415,7 @@ class Case {
   }
 
   /**
-   * Remove party from case
+   * Remove party from case (from case_lawyers table)
    * @param {number} case_id - Case ID
    * @param {number} party_id - Party ID
    * @returns {Promise<boolean>} True if removed successfully
@@ -398,7 +423,7 @@ class Case {
   static async removeParty(case_id, party_id) {
     try {
       const result = await query(
-        'DELETE FROM case_parties WHERE case_id = $1 AND party_id = $2',
+        'DELETE FROM case_lawyers WHERE case_id = $1 AND party_id = $2',
         [case_id, party_id]
       );
       return result.rowCount > 0;
@@ -452,8 +477,8 @@ class Case {
   static async getStatistics(case_id) {
     try {
       const [partiesResult, lawyersResult, hearingsResult, documentsResult] = await Promise.all([
-        query('SELECT COUNT(*) as count FROM case_parties WHERE case_id = $1', [case_id]),
-        query('SELECT COUNT(*) as count FROM case_lawyers WHERE case_id = $1', [case_id]),
+        query('SELECT COUNT(DISTINCT party_id) as count FROM case_lawyers WHERE case_id = $1', [case_id]),
+        query('SELECT COUNT(DISTINCT lawyer_id) as count FROM case_lawyers WHERE case_id = $1', [case_id]),
         query('SELECT COUNT(*) as count FROM hearings WHERE case_id = $1', [case_id]),
         query('SELECT COUNT(*) as count FROM documents WHERE case_id = $1', [case_id])
       ]);

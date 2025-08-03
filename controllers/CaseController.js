@@ -64,6 +64,41 @@ class CaseController {
     }
   }
 
+  // Get case by ID with full details
+  static async getCaseByIdWithDetails(req, res) {
+    try {
+      const caseId = parseInt(req.params.id);
+      
+      if (isNaN(caseId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid case ID'
+        });
+      }
+      
+      const caseData = await Case.findByIdWithDetails(caseId);
+      
+      if (!caseData) {
+        return res.status(404).json({
+          success: false,
+          message: 'Case not found'
+        });
+      }
+      
+      res.json({
+        success: true,
+        data: caseData
+      });
+    } catch (error) {
+      console.error('Error in getCaseByIdWithDetails:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+
   // Get case by ID
   static async getCaseById(req, res) {
     try {
