@@ -7,6 +7,9 @@ const lawyerRouter = express.Router();
 // Protected routes - require authentication
 lawyerRouter.use(authMiddleware);
 
+// User-specific lawyer routes
+lawyerRouter.get('/my-lawyers', authMiddleware,LawyerController.getUserLawyers);
+
 // Basic CRUD operations
 lawyerRouter.post('/', LawyerController.create);
 lawyerRouter.get('/', LawyerController.getAll);

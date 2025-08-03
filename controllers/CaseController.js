@@ -1,6 +1,37 @@
 const Case = require('../models/Case');
+const CaseLawyer = require('../models/CaseLawyer');
 
 class CaseController {
+  // Get all cases for the authenticated user
+  static async getUserCases(req, res) {
+    try {
+      const { page = 1, limit = 20, status, case_type, court_id } = req.query;
+      const offset = (page - 1) * limit;
+      const user_id = req.user.user_id;
+      
+      // First, get all cases where the user is involved as a lawyer
+      const casesResult = await CaseLawyer.getCasesByUserId(
+        user_id,
+        parseInt(limit), 
+        parseInt(offset), 
+        status, 
+        case_type, 
+        court_id ? parseInt(court_id) : null
+      );
+      
+      res.json({
+        success: true,
+        data: casesResult
+      });
+    } catch (error) {
+      console.error('Error in getUserCases:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
   // Get all cases
   static async getAllCases(req, res) {
     try {

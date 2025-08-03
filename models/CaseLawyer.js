@@ -81,6 +81,107 @@ class CaseLawyer {
   }
 
   /**
+   * Get all cases for a specific user
+   * @param {number} user_id - User ID
+   * @param {number} [limit=20] - Number of records per page
+   * @param {number} [offset=0] - Number of records to skip
+   * @param {string} [status] - Filter by status (optional)
+   * @param {string} [case_type] - Filter by case type (optional)
+   * @param {number} [court_id] - Filter by court ID (optional)
+   * @returns {Promise<Object>} Array of cases with pagination info
+   */
+  static async getCasesByUserId(user_id, limit = 20, offset = 0, status = null, case_type = null, court_id = null) {
+    try {
+      let sql = `
+        SELECT DISTINCT c.case_id, c.case_number, c.court_id, c.court_name, c.case_type, 
+               c.legal_section, c.filing_date, c.status, c.stage, c.description, 
+               c.next_hearing, c.cfms_case_code,
+               cl.lawyer_id, cl.party_id,
+               l.name as lawyer_name, l.license_no,
+               p.name as party_name, p.role
+        FROM case_lawyers cl
+        INNER JOIN cases c ON cl.case_id = c.case_id
+        INNER JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+        INNER JOIN parties p ON cl.party_id = p.party_id
+        WHERE cl.user_id = $1`;
+      
+      let params = [user_id];
+      let conditions = [];
+      let paramCount = 2;
+
+      if (status) {
+        conditions.push(`c.status = $${paramCount}`);
+        params.push(status);
+        paramCount++;
+      }
+
+      if (case_type) {
+        conditions.push(`c.case_type = $${paramCount}`);
+        params.push(case_type);
+        paramCount++;
+      }
+
+      if (court_id) {
+        conditions.push(`c.court_id = $${paramCount}`);
+        params.push(court_id);
+        paramCount++;
+      }
+
+      if (conditions.length > 0) {
+        sql += ' AND ' + conditions.join(' AND ');
+      }
+
+      sql += ` ORDER BY c.filing_date DESC LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+      params.push(limit, offset);
+
+      const result = await query(sql, params);
+
+      // Get total count for pagination
+      let countSql = `
+        SELECT COUNT(DISTINCT c.case_id) 
+        FROM case_lawyers cl
+        INNER JOIN cases c ON cl.case_id = c.case_id
+        WHERE cl.user_id = $1`;
+      
+      let countParams = [user_id];
+      let countParamCount = 2;
+
+      if (status) {
+        countSql += ` AND c.status = $${countParamCount}`;
+        countParams.push(status);
+        countParamCount++;
+      }
+
+      if (case_type) {
+        countSql += ` AND c.case_type = $${countParamCount}`;
+        countParams.push(case_type);
+        countParamCount++;
+      }
+
+      if (court_id) {
+        countSql += ` AND c.court_id = $${countParamCount}`;
+        countParams.push(court_id);
+        countParamCount++;
+      }
+
+      const countResult = await query(countSql, countParams);
+      const totalCases = parseInt(countResult.rows[0].count);
+
+      return {
+        cases: result.rows,
+        pagination: {
+          limit,
+          offset,
+          total: totalCases,
+          hasMore: offset + limit < totalCases
+        }
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
    * Get all cases for a specific lawyer
    * @param {number} lawyer_id - Lawyer ID
    * @returns {Promise<Array>} Array of cases with party information

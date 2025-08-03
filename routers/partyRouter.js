@@ -1,7 +1,14 @@
 const express = require('express');
 const PartyController = require('../controllers/PartyController');
+const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
+
+// Protected routes - require authentication
+router.use(authMiddleware);
+
+// User-specific party routes
+router.get('/my-parties', authMiddleware,PartyController.getUserParties);
 
 // Basic CRUD routes
 router.post('/', PartyController.create);

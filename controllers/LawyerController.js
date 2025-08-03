@@ -1,12 +1,14 @@
 const Lawyer = require('../models/Lawyer');
+const UserLawyer = require('../models/UserLawyer');
 
 class LawyerController {
   /**
-   * Create a new lawyer
+   * Create a new lawyer and associate with user
    */
   static async create(req, res) {
     try {
       const { name, license_no, contact_info } = req.body;
+      const user_id = req.user.user_id;
 
       // Validate required fields
       if (!name) {
@@ -29,6 +31,9 @@ class LawyerController {
 
       const lawyer = await Lawyer.create({ name, license_no, contact_info });
 
+      // Create user-lawyer relationship
+      await UserLawyer.create({ user_id, lawyer_id: lawyer.lawyer_id });
+
       res.status(201).json({
         success: true,
         message: 'Lawyer created successfully',
@@ -39,6 +44,30 @@ class LawyerController {
       res.status(500).json({
         success: false,
         message: 'Failed to create lawyer',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get all lawyers for the authenticated user
+   */
+  static async getUserLawyers(req, res) {
+    try {
+      const user_id = req.user.user_id;
+      
+      const lawyers = await UserLawyer.getLawyersByUser(user_id);
+
+      res.status(200).json({
+        success: true,
+        message: 'User lawyers retrieved successfully',
+        data: { lawyers }
+      });
+    } catch (error) {
+      console.error('Error fetching user lawyers:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch user lawyers',
         error: error.message
       });
     }
@@ -331,7 +360,5 @@ class LawyerController {
     }
   }
 }
-
-module.exports = LawyerController;
 
 module.exports = LawyerController;

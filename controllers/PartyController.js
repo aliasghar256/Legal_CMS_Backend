@@ -1,12 +1,14 @@
 const Party = require('../models/Party');
+const UserParty = require('../models/UserParty');
 
 class PartyController {
   /**
-   * Create a new party
+   * Create a new party and associate with user
    */
   static async create(req, res) {
     try {
       const { name, cnic, role, contact_info } = req.body;
+      const user_id = req.user.user_id;
 
       // Validate required fields
       if (!name) {
@@ -29,6 +31,9 @@ class PartyController {
 
       const party = await Party.create({ name, cnic, role, contact_info });
 
+      // Create user-party relationship
+      await UserParty.create({ user_id, party_id: party.party_id });
+
       res.status(201).json({
         success: true,
         message: 'Party created successfully',
@@ -39,6 +44,30 @@ class PartyController {
       res.status(500).json({
         success: false,
         message: 'Failed to create party',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get all parties for the authenticated user
+   */
+  static async getUserParties(req, res) {
+    try {
+      const user_id = req.user.user_id;
+      
+      const parties = await UserParty.getPartiesByUser(user_id);
+
+      res.status(200).json({
+        success: true,
+        message: 'User parties retrieved successfully',
+        data: { parties }
+      });
+    } catch (error) {
+      console.error('Error fetching user parties:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch user parties',
         error: error.message
       });
     }

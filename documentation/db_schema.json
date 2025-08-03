@@ -323,6 +323,30 @@
   "is_nullable": "YES",
   "column_default": null
 }, {
+  "table_name": "user_lawyers",
+  "column_name": "user_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "user_lawyers",
+  "column_name": "lawyer_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "user_parties",
+  "column_name": "user_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "user_parties",
+  "column_name": "party_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
   "table_name": "users",
   "column_name": "user_id",
   "data_type": "integer",
