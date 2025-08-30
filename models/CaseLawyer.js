@@ -63,8 +63,8 @@ class CaseLawyer {
     try {
       const result = await query(
         `SELECT cl.case_id, cl.lawyer_id, cl.party_id, cl.user_id,
-                l.name as lawyer_name, l.license_no, l.contact_info as lawyer_contact,
-                p.name as party_name, p.cnic, p.role, p.contact_info as party_contact,
+                l.name as lawyer_name, l.license_no, l.email as lawyer_email, l.phone_number as lawyer_phone,
+                p.name as party_name, p.cnic, p.role, p.email as party_email, p.phone_number as party_phone,
                 u.name as user_name, u.email as user_email
          FROM case_lawyers cl
          INNER JOIN lawyers l ON cl.lawyer_id = l.lawyer_id

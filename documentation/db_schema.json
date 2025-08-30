@@ -209,6 +209,54 @@
   "is_nullable": "YES",
   "column_default": null
 }, {
+  "table_name": "email_reminders",
+  "column_name": "email_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "email_reminders",
+  "column_name": "reminder_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "email_reminders",
+  "column_name": "subject",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "email_reminders",
+  "column_name": "message",
+  "data_type": "text",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "email_reminders",
+  "column_name": "sent_at",
+  "data_type": "timestamp with time zone",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "email_reminders",
+  "column_name": "status",
+  "data_type": "character varying",
+  "is_nullable": "NO",
+  "column_default": "'pending'::character varying"
+}, {
+  "table_name": "email_reminders",
+  "column_name": "response",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "email_reminders",
+  "column_name": "contact_email",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
   "table_name": "hearings",
   "column_name": "hearing_id",
   "data_type": "integer",
@@ -288,8 +336,14 @@
   "column_default": null
 }, {
   "table_name": "lawyers",
-  "column_name": "contact_info",
-  "data_type": "text",
+  "column_name": "email",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "lawyers",
+  "column_name": "phone_number",
+  "data_type": "character varying",
   "is_nullable": "YES",
   "column_default": null
 }, {
@@ -318,8 +372,50 @@
   "column_default": null
 }, {
   "table_name": "parties",
-  "column_name": "contact_info",
+  "column_name": "email",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "parties",
+  "column_name": "phone_number",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "reminders",
+  "column_name": "reminder_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "reminders",
+  "column_name": "scheduled_time",
+  "data_type": "timestamp with time zone",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "reminders",
+  "column_name": "status",
+  "data_type": "character varying",
+  "is_nullable": "NO",
+  "column_default": "'scheduled'::character varying"
+}, {
+  "table_name": "reminders",
+  "column_name": "note",
   "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "reminders",
+  "column_name": "whatsapp_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "reminders",
+  "column_name": "email_id",
+  "data_type": "integer",
   "is_nullable": "YES",
   "column_default": null
 }, {
@@ -345,6 +441,30 @@
   "column_name": "party_id",
   "data_type": "integer",
   "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "user_reminders",
+  "column_name": "user_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "user_reminders",
+  "column_name": "case_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "user_reminders",
+  "column_name": "hearing_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "user_reminders",
+  "column_name": "reminder_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
   "column_default": null
 }, {
   "table_name": "users",
@@ -378,7 +498,49 @@
   "column_default": null
 }, {
   "table_name": "users",
-  "column_name": "contact_info",
+  "column_name": "phone_number",
+  "data_type": "character varying",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "whatsapp_reminders",
+  "column_name": "whatsapp_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "whatsapp_reminders",
+  "column_name": "reminder_id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "whatsapp_reminders",
+  "column_name": "message",
+  "data_type": "text",
+  "is_nullable": "NO",
+  "column_default": null
+}, {
+  "table_name": "whatsapp_reminders",
+  "column_name": "sent_at",
+  "data_type": "timestamp with time zone",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "whatsapp_reminders",
+  "column_name": "status",
+  "data_type": "character varying",
+  "is_nullable": "NO",
+  "column_default": "'pending'::character varying"
+}, {
+  "table_name": "whatsapp_reminders",
+  "column_name": "response",
+  "data_type": "text",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "whatsapp_reminders",
+  "column_name": "contact_number",
   "data_type": "text",
   "is_nullable": "YES",
   "column_default": null

@@ -60,7 +60,7 @@ class UserLawyer {
     try {
       const result = await query(
         `SELECT ul.user_id, ul.lawyer_id,
-                l.name, l.license_no, l.contact_info
+                l.name, l.license_no, l.email, l.phone_number
          FROM user_lawyers ul
          INNER JOIN lawyers l ON ul.lawyer_id = l.lawyer_id
          WHERE ul.user_id = $1
@@ -82,7 +82,7 @@ class UserLawyer {
     try {
       const result = await query(
         `SELECT ul.user_id, ul.lawyer_id,
-                u.name, u.email, u.license_no, u.contact_info
+                u.name, u.email, u.license_no, u.phone_number
          FROM user_lawyers ul
          INNER JOIN users u ON ul.user_id = u.user_id
          WHERE ul.lawyer_id = $1

@@ -6,20 +6,21 @@ class Lawyer {
    * @param {Object} lawyerData - Lawyer information
    * @param {string} lawyerData.name - Lawyer name (required)
    * @param {string} [lawyerData.license_no] - License number (optional)
-   * @param {string} [lawyerData.contact_info] - Contact information (optional)
+   * @param {string} [lawyerData.email] - Email address (optional)
+   * @param {string} [lawyerData.phone_number] - Phone number (optional)
    * @returns {Promise<Object>} Created lawyer data
    */
-  static async create({ name, license_no = null, contact_info = null }) {
+  static async create({ name, license_no = null, email = null, phone_number = null }) {
     try {
       if (!name) {
         throw new Error('Lawyer name is required');
       }
 
       const result = await query(
-        `INSERT INTO lawyers (name, license_no, contact_info) 
-         VALUES ($1, $2, $3) 
-         RETURNING lawyer_id, name, license_no, contact_info`,
-        [name, license_no, contact_info]
+        `INSERT INTO lawyers (name, license_no, email, phone_number) 
+         VALUES ($1, $2, $3, $4) 
+         RETURNING lawyer_id, name, license_no, email, phone_number`,
+        [name, license_no, email, phone_number]
       );
 
       return result.rows[0];
@@ -36,7 +37,7 @@ class Lawyer {
   static async findById(lawyer_id) {
     try {
       const result = await query(
-        'SELECT lawyer_id, name, license_no, contact_info FROM lawyers WHERE lawyer_id = $1',
+        'SELECT lawyer_id, name, license_no, email, phone_number FROM lawyers WHERE lawyer_id = $1',
         [lawyer_id]
       );
       return result.rows[0] || null;
@@ -53,7 +54,7 @@ class Lawyer {
   static async findByName(name) {
     try {
       const result = await query(
-        'SELECT lawyer_id, name, license_no, contact_info FROM lawyers WHERE name ILIKE $1 ORDER BY name',
+        'SELECT lawyer_id, name, license_no, email, phone_number FROM lawyers WHERE name ILIKE $1 ORDER BY name',
         [`%${name}%`]
       );
       return result.rows;
@@ -70,7 +71,7 @@ class Lawyer {
   static async findByLicenseNo(license_no) {
     try {
       const result = await query(
-        'SELECT lawyer_id, name, license_no, contact_info FROM lawyers WHERE license_no = $1',
+        'SELECT lawyer_id, name, license_no, email, phone_number FROM lawyers WHERE license_no = $1',
         [license_no]
       );
       return result.rows[0] || null;
@@ -88,7 +89,7 @@ class Lawyer {
   static async findAll(limit = 50, offset = 0) {
     try {
       const result = await query(
-        'SELECT lawyer_id, name, license_no, contact_info FROM lawyers ORDER BY name LIMIT $1 OFFSET $2',
+        'SELECT lawyer_id, name, license_no, email, phone_number FROM lawyers ORDER BY name LIMIT $1 OFFSET $2',
         [limit, offset]
       );
 
@@ -123,7 +124,7 @@ class Lawyer {
       let paramCount = 1;
 
       Object.keys(updates).forEach(key => {
-        if (['name', 'license_no', 'contact_info'].includes(key) && updates[key] !== undefined) {
+        if (['name', 'license_no', 'email', 'phone_number'].includes(key) && updates[key] !== undefined) {
           fields.push(`${key} = $${paramCount}`);
           values.push(updates[key]);
           paramCount++;
@@ -137,7 +138,7 @@ class Lawyer {
       values.push(lawyer_id);
       const result = await query(
         `UPDATE lawyers SET ${fields.join(', ')} WHERE lawyer_id = $${paramCount} 
-         RETURNING lawyer_id, name, license_no, contact_info`,
+         RETURNING lawyer_id, name, license_no, email, phone_number`,
         values
       );
 
@@ -266,7 +267,5 @@ class Lawyer {
     }
   }
 }
-
-module.exports = Lawyer;
 
 module.exports = Lawyer;

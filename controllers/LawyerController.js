@@ -8,7 +8,7 @@ class LawyerController {
    */
   static async create(req, res) {
     try {
-      const { name, license_no, contact_info } = req.body;
+      const { name, license_no, email, phone_number } = req.body;
       const user_id = req.user.user_id;
 
       // Validate required fields
@@ -30,7 +30,7 @@ class LawyerController {
         }
       }
 
-      const lawyer = await Lawyer.create({ name, license_no, contact_info });
+      const lawyer = await Lawyer.create({ name, license_no, email, phone_number });
 
       // Create user-lawyer relationship
       await UserLawyer.create({ user_id, lawyer_id: lawyer.lawyer_id });

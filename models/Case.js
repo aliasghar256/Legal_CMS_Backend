@@ -80,7 +80,7 @@ class Case {
 
       // Get parties through case_lawyers table
       const parties = await query(
-        `SELECT DISTINCT p.party_id, p.name, p.cnic, p.role, p.contact_info
+        `SELECT DISTINCT p.party_id, p.name, p.cnic, p.role, p.email, p.phone_number
          FROM parties p
          INNER JOIN case_lawyers cl ON p.party_id = cl.party_id
          WHERE cl.case_id = $1
@@ -90,13 +90,13 @@ class Case {
 
       // Get lawyers through case_lawyers table with party information
       const lawyers = await query(
-        `SELECT DISTINCT l.lawyer_id, l.name, l.license_no, l.contact_info,
+        `SELECT DISTINCT l.lawyer_id, l.name, l.license_no, l.email, l.phone_number,
                 STRING_AGG(DISTINCT p.name, ', ') as party_names
          FROM lawyers l
          INNER JOIN case_lawyers cl ON l.lawyer_id = cl.lawyer_id
          LEFT JOIN parties p ON cl.party_id = p.party_id
          WHERE cl.case_id = $1
-         GROUP BY l.lawyer_id, l.name, l.license_no, l.contact_info
+         GROUP BY l.lawyer_id, l.name, l.license_no, l.email, l.phone_number
          ORDER BY l.name`,
         [case_id]
       );
@@ -145,7 +145,7 @@ class Case {
   static async findPartiesByCaseId(case_id) {
     try {
       const result = await query(
-        `SELECT DISTINCT p.party_id, p.name, p.cnic, p.role, p.contact_info
+        `SELECT DISTINCT p.party_id, p.name, p.cnic, p.role, p.email, p.phone_number
          FROM parties p
          INNER JOIN case_lawyers cl ON p.party_id = cl.party_id
          WHERE cl.case_id = $1

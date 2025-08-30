@@ -5,7 +5,7 @@ class UserController {
   // Signup - Register a new user
   static async signup(req, res) {
     try {
-      const { name, email, password, license_no, contact_info } = req.body;
+      const { name, email, password, license_no, phone_number } = req.body;
 
       // Validation
       if (!name || !email || !password) {
@@ -47,7 +47,7 @@ class UserController {
         email,
         password,
         license_no: license_no || null,
-        contact_info: contact_info || null
+        phone_number: phone_number || null
       });
 
       // Generate JWT token
@@ -69,7 +69,7 @@ class UserController {
             name: user.name,
             email: user.email,
             license_no: user.license_no,
-            contact_info: user.contact_info
+            phone_number: user.phone_number
           },
           token
         }
@@ -143,7 +143,7 @@ class UserController {
             name: user.name,
             email: user.email,
             license_no: user.license_no,
-            contact_info: user.contact_info
+            phone_number: user.phone_number
           },
           token
         }

@@ -60,7 +60,7 @@ class UserParty {
     try {
       const result = await query(
         `SELECT up.user_id, up.party_id,
-                p.name, p.cnic, p.role, p.contact_info
+                p.name, p.cnic, p.role, p.email, p.phone_number
          FROM user_parties up
          INNER JOIN parties p ON up.party_id = p.party_id
          WHERE up.user_id = $1
@@ -82,7 +82,7 @@ class UserParty {
     try {
       const result = await query(
         `SELECT up.user_id, up.party_id,
-                u.name, u.email, u.license_no, u.contact_info
+                u.name, u.email, u.license_no, u.phone_number
          FROM user_parties up
          INNER JOIN users u ON up.user_id = u.user_id
          WHERE up.party_id = $1

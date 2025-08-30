@@ -8,7 +8,7 @@ class PartyController {
    */
   static async create(req, res) {
     try {
-      const { name, cnic, role, contact_info } = req.body;
+      const { name, cnic, role, email, phone_number } = req.body;
       const user_id = req.user.user_id;
 
       // Validate required fields
@@ -30,7 +30,7 @@ class PartyController {
         }
       }
 
-      const party = await Party.create({ name, cnic, role, contact_info });
+      const party = await Party.create({ name, cnic, role, email, phone_number });
 
       // Create user-party relationship
       await UserParty.create({ user_id, party_id: party.party_id });

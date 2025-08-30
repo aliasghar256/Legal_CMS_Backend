@@ -7,20 +7,21 @@ class Party {
    * @param {string} partyData.name - Party name (required)
    * @param {string} [partyData.cnic] - CNIC number (optional)
    * @param {string} [partyData.role] - Party role (optional)
-   * @param {string} [partyData.contact_info] - Contact information (optional)
+   * @param {string} [partyData.email] - Email address (optional)
+   * @param {string} [partyData.phone_number] - Phone number (optional)
    * @returns {Promise<Object>} Created party data
    */
-  static async create({ name, cnic = null, role = null, contact_info = null }) {
+  static async create({ name, cnic = null, role = null, email = null, phone_number = null }) {
     try {
       if (!name) {
         throw new Error('Party name is required');
       }
 
       const result = await query(
-        `INSERT INTO parties (name, cnic, role, contact_info) 
-         VALUES ($1, $2, $3, $4) 
-         RETURNING party_id, name, cnic, role, contact_info`,
-        [name, cnic, role, contact_info]
+        `INSERT INTO parties (name, cnic, role, email, phone_number) 
+         VALUES ($1, $2, $3, $4, $5) 
+         RETURNING party_id, name, cnic, role, email, phone_number`,
+        [name, cnic, role, email, phone_number]
       );
 
       return result.rows[0];
@@ -37,7 +38,7 @@ class Party {
   static async findById(party_id) {
     try {
       const result = await query(
-        'SELECT party_id, name, cnic, role, contact_info FROM parties WHERE party_id = $1',
+        'SELECT party_id, name, cnic, role, email, phone_number FROM parties WHERE party_id = $1',
         [party_id]
       );
       return result.rows[0] || null;
@@ -54,7 +55,7 @@ class Party {
   static async findByName(name) {
     try {
       const result = await query(
-        'SELECT party_id, name, cnic, role, contact_info FROM parties WHERE name ILIKE $1 ORDER BY name',
+        'SELECT party_id, name, cnic, role, email, phone_number FROM parties WHERE name ILIKE $1 ORDER BY name',
         [`%${name}%`]
       );
       return result.rows;
@@ -71,7 +72,7 @@ class Party {
   static async findByCnic(cnic) {
     try {
       const result = await query(
-        'SELECT party_id, name, cnic, role, contact_info FROM parties WHERE cnic = $1',
+        'SELECT party_id, name, cnic, role, email, phone_number FROM parties WHERE cnic = $1',
         [cnic]
       );
       return result.rows[0] || null;
@@ -89,7 +90,7 @@ class Party {
    */
   static async findAll(limit = 50, offset = 0, role = null) {
     try {
-      let sql = 'SELECT party_id, name, cnic, role, contact_info FROM parties';
+      let sql = 'SELECT party_id, name, cnic, role, email, phone_number FROM parties';
       let params = [];
       let paramCount = 1;
 
@@ -142,7 +143,7 @@ class Party {
       let paramCount = 1;
 
       Object.keys(updates).forEach(key => {
-        if (['name', 'cnic', 'role', 'contact_info'].includes(key) && updates[key] !== undefined) {
+        if (['name', 'cnic', 'role', 'email', 'phone_number'].includes(key) && updates[key] !== undefined) {
           fields.push(`${key} = $${paramCount}`);
           values.push(updates[key]);
           paramCount++;
@@ -156,7 +157,7 @@ class Party {
       values.push(party_id);
       const result = await query(
         `UPDATE parties SET ${fields.join(', ')} WHERE party_id = $${paramCount} 
-         RETURNING party_id, name, cnic, role, contact_info`,
+         RETURNING party_id, name, cnic, role, email, phone_number`,
         values
       );
 
@@ -191,7 +192,7 @@ class Party {
   static async findByCaseId(case_id) {
     try {
       const result = await query(
-        `SELECT p.party_id, p.name, p.cnic, p.role, p.contact_info
+        `SELECT p.party_id, p.name, p.cnic, p.role, p.email, p.phone_number
          FROM parties p
          INNER JOIN case_parties cp ON p.party_id = cp.party_id
          WHERE cp.case_id = $1

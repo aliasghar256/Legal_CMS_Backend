@@ -20,7 +20,7 @@ class CourtSearchController {
 
       // Prepare form data for the external API
       const formData = new URLSearchParams();
-      formData.append('_token', process.env.COURT_SEARCH_TOKEN); // This might need to be dynamic
+      formData.append('_token', 'nLhJF8VFV3IHRpsW6bc0TviaWX6l5yhJktAuwYZy'); // This might need to be dynamic
       formData.append('district', district);
       formData.append('caseno', caseno);
       formData.append('caseyear', caseyear);
@@ -44,7 +44,7 @@ class CourtSearchController {
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': `XSRF-TOKEN=${process.env.COURT_SEARCH_XSRF_TOKEN}; cfms_dc_session=${process.env.COURT_SEARCH_SESSION}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`
+          'Cookie': 'XSRF-TOKEN=eyJpdiI6Ii9JZUR2N0tiQXJIWU9zeDVGblFjREE9PSIsInZhbHVlIjoiREV2OTlsOHJKcWU4eUdIK1YxVnRrZVR3NU5La0NJd2VKOFM3dzQ2YzZxMFB3SVFMd1NxalJjTWkyelI0UDM5bUdDcm5pcmhwaXRTekFFZVZjL0o3REtoMWViL3gyMVdMZGZVNTV1d0JSMDE4RWRlYmwxcCtvcnVoMXc3bytBVHYiLCJtYWMiOiIzNmRlYjg0ZDE1NjdlMDNlM2Y2NGQzMTUyOWQxMjNlODgwNWFhM2RkNzUwMmU3Yjc0MTFkOTgxY2VlZjVkMzA5IiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6Imx2T0FLUzZpak9lSE1aRkZuQlFoUHc9PSIsInZhbHVlIjoiUmdIelN1amtjWldmZnBJMFNiV2RZdkZXRjF5OUNnQy9sS1RtRDY5SmUvdjcxb1BuZ3RVOWJtTE53aGdDRC83QXFYKzJHWklmVlhnSjhZMXRTVHE3UmRRallUVzRsbXdsVzN1UDlEQmMyVXg1ZlIySUkrYlFzS05TZTNIQzd5OFciLCJtYWMiOiIxNTFlYWE2YjNhYTk5MDkwNTg1MjFhZmY4YmMzYTkwYzBkMzE2NTU1OWUzZWMxMmFhODJmOWIxZTlkZmFhNzc1IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0'
         },
         timeout: 30000 // 30 second timeout
       });
@@ -174,7 +174,7 @@ class CourtSearchController {
 
       // Prepare form data for case profile request
       const formData = new URLSearchParams();
-      formData.append('_token', process.env.COURT_SEARCH_TOKEN);
+      formData.append('_token', 'nLhJF8VFV3IHRpsW6bc0TviaWX6l5yhJktAuwYZy');
       formData.append('casecode', caseCode);
 
       // Make request to get case profile
@@ -185,7 +185,7 @@ class CourtSearchController {
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': `XSRF-TOKEN=${process.env.COURT_SEARCH_XSRF_TOKEN}; cfms_dc_session=${process.env.COURT_SEARCH_SESSION}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`
+          'Cookie': 'XSRF-TOKEN=eyJpdiI6Ii9JZUR2N0tiQXJIWU9zeDVGblFjREE9PSIsInZhbHVlIjoiREV2OTlsOHJKcWU4eUdIK1YxVnRrZVR3NU5La0NJd2VKOFM3dzQ2YzZxMFB3SVFMd1NxalJjTWkyelI0UDM5bUdDcm5pcmhwaXRTekFFZVZjL0o3REtoMWViL3gyMVdMZGZVNTV1d0JSMDE4RWRlYmwxcCtvcnVoMXc3bytBVHYiLCJtYWMiOiIzNmRlYjg0ZDE1NjdlMDNlM2Y2NGQzMTUyOWQxMjNlODgwNWFhM2RkNzUwMmU3Yjc0MTFkOTgxY2VlZjVkMzA5IiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6Imx2T0FLUzZpak9lSE1aRkZuQlFoUHc9PSIsInZhbHVlIjoiUmdIelN1amtjWldmZnBJMFNiV2RZdkZXRjF5OUNnQy9sS1RtRDY5SmUvdjcxb1BuZ3RVOWJtTE53aGdDRC83QXFYKzJHWklmVlhnSjhZMXRTVHE3UmRRallUVzRsbXdsVzN1UDlEQmMyVXg1ZlIySUkrYlFzS05TZTNIQzd5OFciLCJtYWMiOiIxNTFlYWE2YjNhYTk5MDkwNTg1MjFhZmY4YmMzYTkwYzBkMzE2NTU1OWUzZWMxMmFhODJmOWIxZTlkZmFhNzc1IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0'
         },
         timeout: 15000
       });
@@ -481,8 +481,7 @@ class CourtSearchController {
                 lawyer1 = await Lawyer.create({
                   name: advocate1.trim(),
                   license_no: null,
-                  email: null,
-                  phone_number: null
+                  contact_info: null
                 });
               }
               
@@ -517,8 +516,7 @@ class CourtSearchController {
                 lawyer2 = await Lawyer.create({
                   name: advocate2.trim(),
                   license_no: null,
-                  email: null,
-                  phone_number: null
+                  contact_info: null
                 });
               }
               
@@ -559,8 +557,7 @@ class CourtSearchController {
                       name: partyName,
                       cnic: null,
                       role: null,
-                      email: null,
-                      phone_number: null
+                      contact_info: null
                     });
                   }
                   
@@ -700,7 +697,7 @@ class CourtSearchController {
     try {
       // Prepare form data for case profile request
       const formData = new URLSearchParams();
-      formData.append('_token', process.env.COURT_SEARCH_TOKEN);
+      formData.append('_token', 'nLhJF8VFV3IHRpsW6bc0TviaWX6l5yhJktAuwYZy');
       formData.append('casecode', caseCode);
 
       // Make request to get case profile
@@ -711,7 +708,7 @@ class CourtSearchController {
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': `XSRF-TOKEN=${process.env.COURT_SEARCH_XSRF_TOKEN}; cfms_dc_session=${process.env.COURT_SEARCH_SESSION}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`
+          'Cookie': 'XSRF-TOKEN=eyJpdiI6Ii9JZUR2N0tiQXJIWU9zeDVGblFjREE9PSIsInZhbHVlIjoiREV2OTlsOHJKcWU4eUdIK1YxVnRrZVR3NU5La0NJd2VKOFM3dzQ2YzZxMFB3SVFMd1NxalJjTWkyelI0UDM5bUdDcm5pcmhwaXRTekFFZVZjL0o3REtoMWViL3gyMVdMZGZVNTV1d0JSMDE4RWRlYmwxcCtvcnVoMXc3bytBVHYiLCJtYWMiOiIzNmRlYjg0ZDE1NjdlMDNlM2Y2NGQzMTUyOWQxMjNlODgwNWFhM2RkNzUwMmU3Yjc0MTFkOTgxY2VlZjVkMzA5IiwidGFnIjoiIn0%3D; cfms_dc_session=eyJpdiI6Imx2T0FLUzZpak9lSE1aRkZuQlFoUHc9PSIsInZhbHVlIjoiUmdIelN1amtjWldmZnBJMFNiV2RZdkZXRjF5OUNnQy9sS1RtRDY5SmUvdjcxb1BuZ3RVOWJtTE53aGdDRC83QXFYKzJHWklmVlhnSjhZMXRTVHE3UmRRallUVzRsbXdsVzN1UDlEQmMyVXg1ZlIySUkrYlFzS05TZTNIQzd5OFciLCJtYWMiOiIxNTFlYWE2YjNhYTk5MDkwNTg1MjFhZmY4YmMzYTkwYzBkMzE2NTU1OWUzZWMxMmFhODJmOWIxZTlkZmFhNzc1IiwidGFnIjoiIn0%3D; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0'
         },
         timeout: 15000
       });

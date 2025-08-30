@@ -3,17 +3,17 @@ const bcrypt = require('bcrypt');
 
 class User {
   // Create a new user (signup)
-  static async create({ name, email, password, license_no = null, contact_info = null }) {
+  static async create({ name, email, password, license_no = null, phone_number = null }) {
     try {
       // Hash password
       const saltRounds = 12;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
       const result = await query(
-        `INSERT INTO users (name, email, password, license_no, contact_info) 
+        `INSERT INTO users (email, password, name, license_no, phone_number) 
          VALUES ($1, $2, $3, $4, $5) 
-         RETURNING user_id, name, email, license_no, contact_info`,
-        [name, email, hashedPassword, license_no, contact_info]
+         RETURNING user_id, name, email, license_no, phone_number`,
+        [email, hashedPassword, name, license_no, phone_number]
       );
 
       return result.rows[0];
@@ -39,7 +39,7 @@ class User {
   static async findById(user_id) {
     try {
       const result = await query(
-        'SELECT user_id, name, email, license_no, contact_info FROM users WHERE user_id = $1',
+        'SELECT user_id, name, email, license_no, phone_number FROM users WHERE user_id = $1',
         [user_id]
       );
       return result.rows[0];
@@ -52,7 +52,7 @@ class User {
   static async findAll(limit = 50, offset = 0) {
     try {
       const result = await query(
-        'SELECT user_id, name, email, license_no, contact_info FROM users ORDER BY name LIMIT $1 OFFSET $2',
+        'SELECT user_id, name, email, license_no, phone_number FROM users ORDER BY name LIMIT $1 OFFSET $2',
         [limit, offset]
       );
       return result.rows;
@@ -69,7 +69,7 @@ class User {
       let paramCount = 1;
 
       Object.keys(updates).forEach(key => {
-        if (['name', 'email', 'license_no', 'contact_info'].includes(key)) {
+        if (['name', 'email', 'license_no', 'phone_number'].includes(key)) {
           fields.push(`${key} = $${paramCount}`);
           values.push(updates[key]);
           paramCount++;
@@ -83,7 +83,7 @@ class User {
       values.push(user_id);
       const result = await query(
         `UPDATE users SET ${fields.join(', ')} WHERE user_id = $${paramCount} 
-         RETURNING user_id, name, email, license_no, contact_info`,
+         RETURNING user_id, name, email, license_no, phone_number`,
         values
       );
 
