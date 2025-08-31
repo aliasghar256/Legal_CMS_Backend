@@ -9,6 +9,7 @@ const partyRouter = require('./partyRouter')
 const userRouter = require('./userRouter')
 const courtSearchRouter = require('./courtSearchRouter')
 const reminderRouter = require('./reminderRouter')
+const schedulerRouter = require('./schedulerRouter')
 
 mainRouter = express.Router()
 
@@ -32,5 +33,6 @@ mainRouter.use('/parties', partyRouter);
 mainRouter.use('/users', userRouter);
 mainRouter.use('/court-search', courtSearchRouter);
 mainRouter.use('/reminders', reminderRouter);
+mainRouter.use('/scheduler', schedulerRouter);
 
 module.exports = mainRouter

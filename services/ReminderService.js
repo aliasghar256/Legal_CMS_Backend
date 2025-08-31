@@ -3,11 +3,13 @@ const EmailReminder = require('../models/EmailReminder');
 const WhatsAppReminder = require('../models/WhatsAppReminder');
 const UserReminder = require('../models/UserReminder');
 const EmailService = require('./EmailService');
+const WhatsAppService = require('./WhatsAppService');
 const { query } = require('../lib/db');
 
 class ReminderService {
   constructor() {
     this.emailService = new EmailService();
+    this.whatsappService = new WhatsAppService();
     this.processingReminders = new Set(); // Track reminders being processed
   }
 
@@ -243,7 +245,7 @@ class ReminderService {
   }
 
   /**
-   * Send WhatsApp reminder (placeholder implementation)
+   * Send WhatsApp reminder using WhatsAppService
    * @param {number} whatsapp_id - WhatsApp reminder ID
    * @param {Object} reminderDetails - Complete reminder details
    * @returns {Promise<Object>} Send result
@@ -263,25 +265,37 @@ class ReminderService {
         throw new Error('No recipient phone number available');
       }
 
-      // Format message with case details
-      const formattedMessage = this.formatWhatsAppMessage(whatsappReminder.message, reminderDetails);
+      // Validate phone number format
+      if (!this.whatsappService.isValidPhoneNumber(recipientPhone)) {
+        throw new Error(`Invalid phone number format: ${recipientPhone}`);
+      }
 
-      // TODO: Implement actual WhatsApp API integration
-      // For now, we'll just log and mark as sent
-      console.log(`WhatsApp reminder ${whatsapp_id} would be sent to ${recipientPhone}:`);
-      console.log(formattedMessage);
-
-      // Mark as sent (placeholder)
-      await WhatsAppReminder.markAsSent(whatsapp_id, { 
-        message: 'Sent via placeholder implementation',
-        recipient: recipientPhone 
-      });
-
-      return {
-        success: true,
-        message: 'WhatsApp reminder processed (placeholder implementation)',
-        recipient: recipientPhone
+      // Prepare reminder data for WhatsApp service
+      const whatsappData = {
+        phoneNumber: recipientPhone,
+        userName: reminderDetails.user_name,
+        caseNumber: reminderDetails.case_number,
+        courtName: reminderDetails.court_name,
+        message: whatsappReminder.message,
+        scheduledTime: reminderDetails.scheduled_time,
+        hearing: reminderDetails.hearing_id ? {
+          date: reminderDetails.hearing_date,
+          type: reminderDetails.hearing_type,
+          description: reminderDetails.hearing_description
+        } : null
       };
+
+      const result = await this.whatsappService.sendReminderMessage(whatsappData);
+      
+      if (result.success) {
+        await WhatsAppReminder.markAsSent(whatsapp_id, result.response);
+        console.log(`WhatsApp reminder ${whatsapp_id} sent successfully to ${recipientPhone}`);
+      } else {
+        await WhatsAppReminder.markAsFailed(whatsapp_id, result);
+        console.error(`Failed to send WhatsApp reminder ${whatsapp_id}:`, result.error);
+      }
+
+      return result;
     } catch (error) {
       console.error(`Error sending WhatsApp reminder ${whatsapp_id}:`, error);
       await WhatsAppReminder.markAsFailed(whatsapp_id, { error: error.message });
@@ -290,33 +304,6 @@ class ReminderService {
         error: error.message
       };
     }
-  }
-
-  /**
-   * Format WhatsApp message with case details
-   * @param {string} message - Original message
-   * @param {Object} reminderDetails - Case and user details
-   * @returns {string} Formatted message
-   */
-  formatWhatsAppMessage(message, reminderDetails) {
-    const caseInfo = `Case: ${reminderDetails.case_number} (${reminderDetails.court_name})`;
-    const timeInfo = `Reminder Time: ${new Date(reminderDetails.scheduled_time).toLocaleString()}`;
-    
-    let formattedMessage = `Hello ${reminderDetails.user_name},\n\n`;
-    formattedMessage += `${message}\n\n`;
-    formattedMessage += `${caseInfo}\n`;
-    formattedMessage += `${timeInfo}\n`;
-    
-    if (reminderDetails.hearing_id) {
-      formattedMessage += `\nHearing: ${new Date(reminderDetails.hearing_date).toLocaleDateString()}`;
-      if (reminderDetails.hearing_type) {
-        formattedMessage += ` (${reminderDetails.hearing_type})`;
-      }
-    }
-    
-    formattedMessage += '\n\n- Legal CMS Reminder System';
-    
-    return formattedMessage;
   }
 
   /**

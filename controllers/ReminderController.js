@@ -178,7 +178,16 @@ class ReminderController {
       const { id } = req.params;
       const user_id = req.user.user_id;
 
-      const userReminder = await UserReminder.findByReminderId(parseInt(id));
+      // Validate reminder ID
+      const reminderId = parseInt(id);
+      if (isNaN(reminderId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid reminder ID'
+        });
+      }
+
+      const userReminder = await UserReminder.findByReminderId(reminderId);
       
       if (!userReminder) {
         return res.status(404).json({
@@ -196,8 +205,8 @@ class ReminderController {
       }
 
       // Get email and WhatsApp reminders
-      const emailReminder = await EmailReminder.findByReminderId(parseInt(id));
-      const whatsappReminder = await WhatsAppReminder.findByReminderId(parseInt(id));
+      const emailReminder = await EmailReminder.findByReminderId(reminderId);
+      const whatsappReminder = await WhatsAppReminder.findByReminderId(reminderId);
 
       const result = {
         ...userReminder,
@@ -264,8 +273,17 @@ class ReminderController {
       const { scheduled_time, note, email_reminder, whatsapp_reminder } = req.body;
       const user_id = req.user.user_id;
 
+      // Validate reminder ID
+      const reminderId = parseInt(id);
+      if (isNaN(reminderId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid reminder ID'
+        });
+      }
+
       // Check if reminder belongs to user
-      const userReminder = await UserReminder.findByReminderId(parseInt(id));
+      const userReminder = await UserReminder.findByReminderId(reminderId);
       if (!userReminder || userReminder.user_id !== user_id) {
         return res.status(404).json({
           success: false,
@@ -281,7 +299,7 @@ class ReminderController {
 
         let updatedReminder = null;
         if (Object.keys(updates).length > 0) {
-          updatedReminder = await Reminder.update(parseInt(id), updates);
+          updatedReminder = await Reminder.update(reminderId, updates);
         }
 
         const updateResults = {
@@ -292,7 +310,7 @@ class ReminderController {
 
         // Update email reminder if provided
         if (email_reminder) {
-          const existingEmailReminder = await EmailReminder.findByReminderId(parseInt(id));
+          const existingEmailReminder = await EmailReminder.findByReminderId(reminderId);
           if (existingEmailReminder) {
             const emailUpdates = {};
             if (email_reminder.subject !== undefined) emailUpdates.subject = email_reminder.subject;
@@ -307,7 +325,7 @@ class ReminderController {
 
         // Update WhatsApp reminder if provided
         if (whatsapp_reminder) {
-          const existingWhatsAppReminder = await WhatsAppReminder.findByReminderId(parseInt(id));
+          const existingWhatsAppReminder = await WhatsAppReminder.findByReminderId(reminderId);
           if (existingWhatsAppReminder) {
             const whatsappUpdates = {};
             if (whatsapp_reminder.message !== undefined) whatsappUpdates.message = whatsapp_reminder.message;
@@ -345,8 +363,17 @@ class ReminderController {
       const { id } = req.params;
       const user_id = req.user.user_id;
 
+      // Validate reminder ID
+      const reminderId = parseInt(id);
+      if (isNaN(reminderId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid reminder ID'
+        });
+      }
+
       // Check if reminder belongs to user
-      const userReminder = await UserReminder.findByReminderId(parseInt(id));
+      const userReminder = await UserReminder.findByReminderId(reminderId);
       if (!userReminder || userReminder.user_id !== user_id) {
         return res.status(404).json({
           success: false,
@@ -356,22 +383,22 @@ class ReminderController {
 
       const result = await transaction(async (client) => {
         // Delete email reminder if exists
-        const emailReminder = await EmailReminder.findByReminderId(parseInt(id));
+        const emailReminder = await EmailReminder.findByReminderId(reminderId);
         if (emailReminder) {
           await EmailReminder.delete(emailReminder.email_id);
         }
 
         // Delete WhatsApp reminder if exists
-        const whatsappReminder = await WhatsAppReminder.findByReminderId(parseInt(id));
+        const whatsappReminder = await WhatsAppReminder.findByReminderId(reminderId);
         if (whatsappReminder) {
           await WhatsAppReminder.delete(whatsappReminder.whatsapp_id);
         }
 
         // Delete user reminder association
-        await UserReminder.delete(user_id, parseInt(id));
+        await UserReminder.delete(user_id, reminderId);
 
         // Delete main reminder
-        await Reminder.delete(parseInt(id));
+        await Reminder.delete(reminderId);
 
         return true;
       });
