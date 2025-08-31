@@ -157,6 +157,41 @@ class UserController {
       });
     }
   }
+  // Get user profile (protected route for token validation)
+  static async getProfile(req, res) {
+    try {
+      // req.user is set by the auth middleware
+      const user = await User.findById(req.user.user_id);
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Profile retrieved successfully',
+        data: {
+          user: {
+            user_id: user.user_id,
+            name: user.name,
+            email: user.email,
+            license_no: user.license_no,
+            phone_number: user.phone_number
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error('Get profile error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error'
+      });
+    }
+  }
 }
 
 module.exports = UserController;

@@ -8,4 +8,7 @@ const userRouter = express.Router();
 userRouter.post('/signup', UserController.signup);
 userRouter.post('/login', UserController.login);
 
+// Protected routes (require authentication)
+userRouter.get('/profile', authMiddleware, UserController.getProfile);
+
 module.exports = userRouter;
