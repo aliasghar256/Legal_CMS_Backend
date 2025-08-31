@@ -13,32 +13,96 @@ app.use((req, res, next) => {
     next()
 })
 
-app.use(cors())
+// Configure CORS for production
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'https://localhost:3000',
+    /^https:\/\/.*\.vercel\.app$/,
+    /^https:\/\/.*\.netlify\.app$/
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}
+
+app.use(cors(corsOptions))
 
 // Body parsing middleware
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+app.use(express.json({ limit: '10mb' }))
+app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-app.use('/', mainRouter)
+// Health check route
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Legal CMS Backend API is running on Vercel',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'production'
+  });
+});
 
-// Initialize database connection and start server
-const PORT = process.env.PORT || 3001;
+// API routes
+app.use('/api', mainRouter)
 
-const startServer = async () => {
-  try {
-    // Test database connection
-    await testConnection();
-    
-    // Start the server
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error.message);
-    process.exit(1);
+// Initialize database connection for serverless
+let isDbConnected = false;
+
+const ensureDbConnection = async () => {
+  if (!isDbConnected) {
+    try {
+      await testConnection();
+      isDbConnected = true;
+      console.log('✅ Database connected successfully');
+    } catch (error) {
+      console.error('❌ Database connection failed:', error.message);
+      throw error;
+    }
   }
 };
 
-startServer();
+// Middleware to ensure DB connection on every request
+app.use(async (req, res, next) => {
+  try {
+    await ensureDbConnection();
+    next();
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Database connection error',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({
+    success: false,
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+    path: req.originalUrl
+  });
+});
+
+// For local development
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
+
+// Export for Vercel
+module.exports = app;
 

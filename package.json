@@ -5,12 +5,18 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo \"No build process required\"",
+    "vercel-build": "echo \"No build process required\"",
+    "local": "NODE_ENV=development node index.js.backup"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "axios": "^1.11.0",
     "bcrypt": "^6.0.0",
