@@ -34,11 +34,10 @@ class WhatsAppService {
         throw new Error('Missing required fields: to, message');
       }
 
-      // Clean phone number (remove non-digits except +)
       const cleanPhone = this.cleanPhoneNumber(to);
 
       if (this.simulationMode) {
-        return this.simulateMessage(cleanPhone, message);
+        return await this.simulateMessage(cleanPhone, message);
       }
 
       // Meta WhatsApp Business API format
@@ -61,8 +60,7 @@ class WhatsAppService {
       return {
         success: true,
         messageId: response.data.messages?.[0]?.id,
-        response: response.data,
-        recipient: cleanPhone
+        response: response.data
       };
 
     } catch (error) {

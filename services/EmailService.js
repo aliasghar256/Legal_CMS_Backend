@@ -27,7 +27,7 @@ class EmailService {
 
       const emailOptions = {
         from: from || process.env.DEFAULT_FROM_EMAIL || 'reminders@legalcms.com',
-        to: [to],
+        to: to,
         subject: subject,
         html: this.formatReminderEmail(message, subject)
       };

@@ -725,6 +725,198 @@ class CourtSearchController {
     }
   }
 
+  // Refresh all tokens (XSRF, Search Token, and Session)
+  static async refreshTokens(req, res) {
+    try {
+      console.log('Starting token refresh process...');
+
+      // Make a GET request to the court search homepage to get fresh tokens
+      const response = await axios.get('https://cases.districtcourtssindh.gos.pk/case-search', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Upgrade-Insecure-Requests': '1',
+          'Cache-Control': 'no-cache'
+        },
+        timeout: 30000
+      });
+
+      console.log('Received response from court search homepage');
+
+      // Extract tokens from response
+      const tokens = CourtSearchController.extractTokensFromResponse(response);
+
+      if (!tokens.searchToken || !tokens.xsrfToken || !tokens.sessionToken) {
+        console.log('Token extraction result:', tokens);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to extract all required tokens',
+          extractedTokens: {
+            searchToken: !!tokens.searchToken,
+            xsrfToken: !!tokens.xsrfToken,
+            sessionToken: !!tokens.sessionToken
+          },
+          details: tokens
+        });
+      }
+
+      // Update environment variables (runtime)
+      process.env.COURT_SEARCH_TOKEN = tokens.searchToken;
+      process.env.COURT_SEARCH_XSRF_TOKEN = tokens.xsrfToken;
+      process.env.COURT_SEARCH_SESSION = tokens.sessionToken;
+
+      // Update .env file
+      const envUpdateResult = await CourtSearchController.updateEnvFile(tokens);
+
+      console.log('Tokens successfully refreshed and updated in environment and .env file');
+
+      res.json({
+        success: true,
+        message: 'All tokens refreshed successfully',
+        tokens: {
+          searchToken: tokens.searchToken,
+          xsrfToken: tokens.xsrfToken,
+          sessionToken: tokens.sessionToken
+        },
+        envFileUpdated: envUpdateResult.success,
+        envUpdateMessage: envUpdateResult.message,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      console.error('Error in refreshTokens:', error);
+      
+      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        return res.status(503).json({
+          success: false,
+          message: 'Court system is currently unavailable',
+          error: 'Connection failed'
+        });
+      }
+      
+      if (error.code === 'ECONNABORTED') {
+        return res.status(504).json({
+          success: false,
+          message: 'Token refresh request timed out',
+          error: 'Request timeout'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Failed to refresh tokens',
+        error: error.message
+      });
+    }
+  }
+
+  // Update .env file with new tokens
+  static async updateEnvFile(tokens) {
+    const fs = require('fs').promises;
+    const path = require('path');
+
+    try {
+      const envPath = path.join(__dirname, '..', '.env');
+      
+      // Read current .env file
+      let envContent = await fs.readFile(envPath, 'utf8');
+      
+      // Update tokens in the content
+      envContent = envContent.replace(
+        /COURT_SEARCH_TOKEN=.*/,
+        `COURT_SEARCH_TOKEN=${tokens.searchToken}`
+      );
+      
+      envContent = envContent.replace(
+        /COURT_SEARCH_XSRF_TOKEN=.*/,
+        `COURT_SEARCH_XSRF_TOKEN=${tokens.xsrfToken}`
+      );
+      
+      envContent = envContent.replace(
+        /COURT_SEARCH_SESSION=.*/,
+        `COURT_SEARCH_SESSION=${tokens.sessionToken}`
+      );
+      
+      // Write updated content back to .env file
+      await fs.writeFile(envPath, envContent, 'utf8');
+      
+      console.log('Successfully updated .env file with new tokens');
+      
+      return {
+        success: true,
+        message: '.env file updated successfully with fresh tokens'
+      };
+      
+    } catch (error) {
+      console.error('Error updating .env file:', error);
+      return {
+        success: false,
+        message: `Failed to update .env file: ${error.message}`
+      };
+    }
+  }
+
+  // Extract tokens from the court search homepage response
+  static extractTokensFromResponse(response) {
+    const tokens = {
+      searchToken: null,
+      xsrfToken: null,
+      sessionToken: null
+    };
+
+    try {
+      // Extract CSRF token from HTML
+      const $ = cheerio.load(response.data);
+      const csrfMetaTag = $('meta[name="csrf-token"]');
+      if (csrfMetaTag.length > 0) {
+        tokens.searchToken = csrfMetaTag.attr('content');
+        console.log('Extracted search token from meta tag');
+      } else {
+        // Try to find token in form inputs
+        const tokenInput = $('input[name="_token"]');
+        if (tokenInput.length > 0) {
+          tokens.searchToken = tokenInput.attr('value');
+          console.log('Extracted search token from form input');
+        }
+      }
+
+      // Extract cookies from response headers
+      const setCookieHeaders = response.headers['set-cookie'];
+      if (setCookieHeaders && Array.isArray(setCookieHeaders)) {
+        setCookieHeaders.forEach(cookie => {
+          // Extract XSRF-TOKEN
+          const xsrfMatch = cookie.match(/XSRF-TOKEN=([^;]+)/);
+          if (xsrfMatch) {
+            tokens.xsrfToken = decodeURIComponent(xsrfMatch[1]);
+            console.log('Extracted XSRF token from cookies');
+          }
+
+          // Extract session token
+          const sessionMatch = cookie.match(/cfms_dc_session=([^;]+)/);
+          if (sessionMatch) {
+            tokens.sessionToken = decodeURIComponent(sessionMatch[1]);
+            console.log('Extracted session token from cookies');
+          }
+        });
+      }
+
+      // Log what we found
+      console.log('Token extraction summary:', {
+        searchToken: tokens.searchToken ? 'Found' : 'Not found',
+        xsrfToken: tokens.xsrfToken ? 'Found' : 'Not found',
+        sessionToken: tokens.sessionToken ? 'Found' : 'Not found'
+      });
+
+    } catch (error) {
+      console.error('Error extracting tokens:', error);
+    }
+
+    return tokens;
+  }
+
   // Get court types
   static async getCourtTypes(req, res) {
     try {

@@ -201,16 +201,25 @@ class ReminderService {
         throw new Error(`Email reminder ${email_id} not found`);
       }
 
-      // Determine recipient email
-      const recipientEmail = emailReminder.contact_email || reminderDetails.user_email;
+      // Handle multiple recipient emails
+      let recipientEmails = [];
+      if (emailReminder.contact_email) {
+        if (emailReminder.contact_email.includes(',')) {
+          recipientEmails = emailReminder.contact_email.split(',').map(email => email.trim());
+        } else {
+          recipientEmails = [emailReminder.contact_email];
+        }
+      } else if (reminderDetails.user_email) {
+        recipientEmails = [reminderDetails.user_email];
+      }
       
-      if (!recipientEmail) {
-        throw new Error('No recipient email address available');
+      if (recipientEmails.length === 0) {
+        throw new Error('No recipient email addresses available');
       }
 
       // Send email using EmailService
       const emailData = {
-        userEmail: recipientEmail,
+        userEmail: recipientEmails.length === 1 ? recipientEmails[0] : recipientEmails.join(','),
         userName: reminderDetails.user_name,
         caseNumber: reminderDetails.case_number,
         courtName: reminderDetails.court_name,
@@ -227,7 +236,7 @@ class ReminderService {
       
       if (result.success) {
         await EmailReminder.markAsSent(email_id, result.response);
-        console.log(`Email reminder ${email_id} sent successfully to ${recipientEmail}`);
+        console.log(`Email reminder ${email_id} sent successfully to ${recipientEmails.join(', ')}`);
       } else {
         await EmailReminder.markAsFailed(email_id, result);
         console.error(`Failed to send email reminder ${email_id}:`, result.error);
@@ -258,21 +267,34 @@ class ReminderService {
         throw new Error(`WhatsApp reminder ${whatsapp_id} not found`);
       }
 
-      // Determine recipient phone number
-      const recipientPhone = whatsappReminder.contact_number || reminderDetails.user_phone;
+      // Handle multiple recipient phone numbers
+      let recipientPhones = [];
+      if (whatsappReminder.contact_number) {
+        if (whatsappReminder.contact_number.includes(',')) {
+          recipientPhones = whatsappReminder.contact_number.split(',').map(phone => phone.trim());
+        } else {
+          recipientPhones = [whatsappReminder.contact_number];
+        }
+      } else if (reminderDetails.user_phone) {
+        recipientPhones = [reminderDetails.user_phone];
+      }
       
-      if (!recipientPhone) {
-        throw new Error('No recipient phone number available');
+      if (recipientPhones.length === 0) {
+        throw new Error('No recipient phone numbers available');
       }
 
-      // Validate phone number format
-      if (!this.whatsappService.isValidPhoneNumber(recipientPhone)) {
-        throw new Error(`Invalid phone number format: ${recipientPhone}`);
+      // Validate all phone numbers
+      const validPhones = recipientPhones.filter(phone => 
+        this.whatsappService.isValidPhoneNumber(phone)
+      );
+      
+      if (validPhones.length === 0) {
+        throw new Error(`No valid phone numbers found: ${recipientPhones.join(', ')}`);
       }
 
       // Prepare reminder data for WhatsApp service
       const whatsappData = {
-        phoneNumber: recipientPhone,
+        phoneNumber: validPhones.length === 1 ? validPhones[0] : validPhones.join(','),
         userName: reminderDetails.user_name,
         caseNumber: reminderDetails.case_number,
         courtName: reminderDetails.court_name,
@@ -289,7 +311,7 @@ class ReminderService {
       
       if (result.success) {
         await WhatsAppReminder.markAsSent(whatsapp_id, result.response);
-        console.log(`WhatsApp reminder ${whatsapp_id} sent successfully to ${recipientPhone}`);
+        console.log(`WhatsApp reminder ${whatsapp_id} sent successfully to ${validPhones.join(', ')}`);
       } else {
         await WhatsAppReminder.markAsFailed(whatsapp_id, result);
         console.error(`Failed to send WhatsApp reminder ${whatsapp_id}:`, result.error);
