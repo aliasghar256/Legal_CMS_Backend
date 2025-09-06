@@ -470,14 +470,78 @@ class CourtSearchController {
             );
             
             if (userCaseConnection.rows.length > 0) {
-              // User is already connected to this case
-              results.failed.push({
-                index: i,
-                caseCode: caseObj.caseCode,
-                error: 'Case already exists and is connected to your account',
-                existingCaseId: existingCase.case_id
+              // User is already connected to this case - check for new hearings
+              console.log(`DEBUG: Case already connected to user. Checking for new hearings...`);
+              
+              // Get existing hearings for this case
+              const existingHearings = await query(
+                'SELECT date, description FROM hearings WHERE case_id = $1',
+                [existingCase.case_id]
+              );
+              
+              // Create a Set of existing hearing signatures for quick lookup
+              const existingHearingSignatures = new Set();
+              existingHearings.rows.forEach(hearing => {
+                const signature = `${hearing.date}_${(hearing.description || '').trim()}`;
+                existingHearingSignatures.add(signature);
               });
-              results.summary.failed++;
+              
+              // Compare with hearings from court search and create new ones
+              const hearingHistory = profileData.hearingHistory || [];
+              const newHearings = [];
+              
+              for (const hearingEntry of hearingHistory) {
+                if (hearingEntry.date) {
+                  let hearingDate = null;
+                  const parsedDate = new Date(hearingEntry.date);
+                  if (!isNaN(parsedDate.getTime())) {
+                    hearingDate = parsedDate.toISOString().split('T')[0];
+                    
+                    // Create signature for this hearing
+                    const hearingSignature = `${hearingDate}_${(hearingEntry.diary || '').trim()}`;
+                    
+                    // Check if this hearing already exists
+                    if (!existingHearingSignatures.has(hearingSignature)) {
+                      try {
+                        const hearing = await Hearing.create({
+                          case_id: existingCase.case_id,
+                          judge_id: null,
+                          date: hearingDate,
+                          description: hearingEntry.diary || '',
+                          type: 'Regular'
+                        });
+                        newHearings.push(hearing);
+                        console.log(`DEBUG: Created new hearing for existing case: ${hearingDate} - ${hearingEntry.diary || 'No diary'}`);
+                      } catch (error) {
+                        console.error(`Error creating new hearing for existing case ${caseObj.caseCode}:`, error);
+                      }
+                    }
+                  }
+                }
+              }
+              
+              if (newHearings.length > 0) {
+                results.successful.push({
+                  index: i,
+                  caseCode: caseObj.caseCode,
+                  createdCase: null,
+                  existingCase: existingCase,
+                  createdLawyers: [],
+                  createdParties: [],
+                  createdCaseLawyers: [],
+                  createdHearings: newHearings,
+                  message: `Added ${newHearings.length} new hearing(s) to existing case`
+                });
+                results.summary.created++;
+              } else {
+                results.failed.push({
+                  index: i,
+                  caseCode: caseObj.caseCode,
+                  error: 'Case already exists and is connected to your account. No new hearings found.',
+                  existingCaseId: existingCase.case_id
+                });
+                results.summary.failed++;
+              }
               continue;
             } else {
               // Case exists but user is not connected - create the connection
