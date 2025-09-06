@@ -1,5 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const Case = require('../models/Case');
+const CaseLawyer = require('../models/CaseLawyer');
 
 class CourtSearchController {
   // Search cases in Sindh District Courts
@@ -459,14 +461,197 @@ class CourtSearchController {
           
           if (existingCase) {
             console.log(`DEBUG: Case already exists - Case ID: ${existingCase.case_id}, Case Number: ${existingCase.case_number}`);
-            results.failed.push({
-              index: i,
-              caseCode: caseObj.caseCode,
-              error: 'Case already exists in database',
-              existingCaseId: existingCase.case_id
-            });
-            results.summary.failed++;
-            continue;
+            
+            // Check if the current user is already connected to this case
+            const userCaseConnection = await query(
+              'SELECT * FROM case_lawyers WHERE case_id = $1 AND user_id = $2',
+              [existingCase.case_id, userId]
+            );
+            
+            if (userCaseConnection.rows.length > 0) {
+              // User is already connected to this case
+              results.failed.push({
+                index: i,
+                caseCode: caseObj.caseCode,
+                error: 'Case already exists and is connected to your account',
+                existingCaseId: existingCase.case_id
+              });
+              results.summary.failed++;
+              continue;
+            } else {
+              // Case exists but user is not connected - create the connection
+              console.log(`DEBUG: Case exists but user not connected. Creating connection for user ${userId}`);
+              
+              // Extract required data from profile for creating relationships
+              const caseDetails = profileData.caseDetails;
+              const parties = profileData.parties || '';
+              const advocate1 = caseDetails['Advocate 1'] || '';
+              const advocate2 = caseDetails['Advocate 2'] || '';
+              
+              // Create parties and lawyers just like for new cases
+              const createdLawyers = [];
+              if (advocate1 && advocate1.trim()) {
+                try {
+                  const existingLawyers = await Lawyer.findByName(advocate1.trim());
+                  let lawyer1 = existingLawyers.find(l => l.name.toLowerCase() === advocate1.trim().toLowerCase());
+                  
+                  if (!lawyer1) {
+                    lawyer1 = await Lawyer.create({
+                      name: advocate1.trim(),
+                      license_no: null,
+                      email: null,
+                      phone_number: null
+                    });
+                  }
+                  
+                  if (lawyer1 && lawyer1.lawyer_id) {
+                    createdLawyers.push(lawyer1);
+                    
+                    // Create UserLawyer relationship
+                    try {
+                      await UserLawyer.create({
+                        user_id: userId,
+                        lawyer_id: lawyer1.lawyer_id
+                      });
+                    } catch (error) {
+                      if (!error.message.includes('already exists')) {
+                        console.error(`Error creating user-lawyer relationship for ${advocate1}:`, error);
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error(`Error creating Advocate 1 for existing case ${caseObj.caseCode}:`, error);
+                }
+              }
+
+              if (advocate2 && advocate2.trim() && advocate2.trim() !== advocate1.trim()) {
+                try {
+                  const existingLawyers = await Lawyer.findByName(advocate2.trim());
+                  let lawyer2 = existingLawyers.find(l => l.name.toLowerCase() === advocate2.trim().toLowerCase());
+                  
+                  if (!lawyer2) {
+                    lawyer2 = await Lawyer.create({
+                      name: advocate2.trim(),
+                      license_no: null,
+                      email: null,
+                      phone_number: null
+                    });
+                  }
+                  
+                  if (lawyer2 && lawyer2.lawyer_id) {
+                    createdLawyers.push(lawyer2);
+                    
+                    try {
+                      await UserLawyer.create({
+                        user_id: userId,
+                        lawyer_id: lawyer2.lawyer_id
+                      });
+                    } catch (error) {
+                      if (!error.message.includes('already exists')) {
+                        console.error(`Error creating user-lawyer relationship for ${advocate2}:`, error);
+                      }
+                    }
+                  }
+                } catch (error) {
+                  console.error(`Error creating Advocate 2 for existing case ${caseObj.caseCode}:`, error);
+                }
+              }
+
+              // Create parties
+              const createdParties = [];
+              if (parties && parties.trim()) {
+                const partiesArray = parties.split(/\s+V\/S\s+/i).map(p => p.trim()).filter(p => p);
+                for (const partyName of partiesArray) {
+                  if (partyName) {
+                    try {
+                      const existingParties = await Party.findByName(partyName);
+                      let party = existingParties.find(p => p.name.toLowerCase() === partyName.toLowerCase());
+                      
+                      if (!party) {
+                        party = await Party.create({
+                          name: partyName,
+                          cnic: null,
+                          role: null,
+                          email: null,
+                          phone_number: null
+                        });
+                      }
+                      
+                      if (party && party.party_id) {
+                        createdParties.push(party);
+                        
+                        try {
+                          await UserParty.create({
+                            user_id: userId,
+                            party_id: party.party_id
+                          });
+                        } catch (error) {
+                          if (!error.message.includes('already exists')) {
+                            console.error(`Error creating user-party relationship for ${partyName}:`, error);
+                          }
+                        }
+                      }
+                    } catch (error) {
+                      console.error(`Error creating party "${partyName}" for existing case ${caseObj.caseCode}:`, error);
+                    }
+                  }
+                }
+              }
+
+              // Create case_lawyers relationships for the existing case
+              const createdCaseLawyers = [];
+              if (createdLawyers.length > 0 && createdParties.length > 0) {
+                for (const lawyer of createdLawyers) {
+                  if (!lawyer || !lawyer.lawyer_id) continue;
+                  for (const party of createdParties) {
+                    if (!party || !party.party_id) continue;
+                    try {
+                      const caseLawyerRelation = await CaseLawyer.create({
+                        case_id: existingCase.case_id,
+                        lawyer_id: lawyer.lawyer_id,
+                        party_id: party.party_id,
+                        user_id: userId
+                      });
+                      createdCaseLawyers.push(caseLawyerRelation);
+                    } catch (error) {
+                      console.error(`Error creating case-lawyer relationship for existing case ${caseObj.caseCode}:`, error);
+                    }
+                  }
+                }
+              } else if (createdParties.length > 0) {
+                // If we have parties but no lawyers, create relationships with null lawyer_id
+                for (const party of createdParties) {
+                  if (!party || !party.party_id) continue;
+                  try {
+                    const caseLawyerRelation = await CaseLawyer.create({
+                      case_id: existingCase.case_id,
+                      lawyer_id: null,
+                      party_id: party.party_id,
+                      user_id: userId
+                    });
+                    createdCaseLawyers.push(caseLawyerRelation);
+                  } catch (error) {
+                    console.error(`Error creating case-party relationship for existing case ${caseObj.caseCode}:`, error);
+                  }
+                }
+              }
+
+              results.successful.push({
+                index: i,
+                caseCode: caseObj.caseCode,
+                createdCase: null, // Case already existed
+                existingCase: existingCase,
+                createdLawyers: createdLawyers,
+                createdParties: createdParties,
+                createdCaseLawyers: createdCaseLawyers,
+                createdHearings: [], // Don't duplicate hearings for existing cases
+                message: 'Connected existing case to your account'
+              });
+              results.summary.created++;
+              
+              console.log(`Successfully connected existing case ${caseObj.caseCode} to user ${userId}`);
+              continue; // Skip creating a new case
+            }
           }
 
           // Create the case
