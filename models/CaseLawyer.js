@@ -5,18 +5,18 @@ class CaseLawyer {
    * Create a new case-lawyer relationship
    * @param {Object} caseLawyerData - Case lawyer relationship data
    * @param {number} caseLawyerData.case_id - Case ID (required)
-   * @param {number} caseLawyerData.lawyer_id - Lawyer ID (required)
+   * @param {number|null} caseLawyerData.lawyer_id - Lawyer ID (optional, can be null for cases without lawyers)
    * @param {number} caseLawyerData.party_id - Party ID (required)
    * @param {number} [caseLawyerData.user_id] - User ID (optional)
    * @returns {Promise<Object>} Created case-lawyer relationship
    */
   static async create({ case_id, lawyer_id, party_id, user_id = null }) {
     try {
-      if (!case_id || !lawyer_id || !party_id) {
-        throw new Error('Case ID, Lawyer ID, and Party ID are required');
+      if (!case_id || !party_id) {
+        throw new Error('Case ID and Party ID are required');
       }
 
-      // Check if this relationship already exists
+      // Check if this relationship already exists (considering null lawyer_id)
       const existing = await this.findByIds(case_id, lawyer_id, party_id);
       if (existing) {
         throw new Error('This case-lawyer-party relationship already exists');
@@ -38,16 +38,24 @@ class CaseLawyer {
   /**
    * Find case-lawyer relationship by IDs
    * @param {number} case_id - Case ID
-   * @param {number} lawyer_id - Lawyer ID
+   * @param {number|null} lawyer_id - Lawyer ID (can be null)
    * @param {number} party_id - Party ID
    * @returns {Promise<Object|null>} Case-lawyer relationship or null if not found
    */
   static async findByIds(case_id, lawyer_id, party_id) {
     try {
-      const result = await query(
-        'SELECT case_id, lawyer_id, party_id, user_id FROM case_lawyers WHERE case_id = $1 AND lawyer_id = $2 AND party_id = $3',
-        [case_id, lawyer_id, party_id]
-      );
+      let query_text;
+      let params;
+      
+      if (lawyer_id === null) {
+        query_text = 'SELECT case_id, lawyer_id, party_id, user_id FROM case_lawyers WHERE case_id = $1 AND lawyer_id IS NULL AND party_id = $2';
+        params = [case_id, party_id];
+      } else {
+        query_text = 'SELECT case_id, lawyer_id, party_id, user_id FROM case_lawyers WHERE case_id = $1 AND lawyer_id = $2 AND party_id = $3';
+        params = [case_id, lawyer_id, party_id];
+      }
+      
+      const result = await query(query_text, params);
       return result.rows[0] || null;
     } catch (error) {
       throw error;
@@ -101,7 +109,7 @@ class CaseLawyer {
                p.name as party_name, p.role
         FROM case_lawyers cl
         INNER JOIN cases c ON cl.case_id = c.case_id
-        INNER JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+        LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
         INNER JOIN parties p ON cl.party_id = p.party_id
         WHERE cl.user_id = $1`;
       

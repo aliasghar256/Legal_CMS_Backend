@@ -611,6 +611,24 @@ class CourtSearchController {
                 }
               }
             }
+          } else if (createdParties.length > 0) {
+            // If we have parties but no lawyers, create relationships with null lawyer_id
+            // This ensures the case appears in user queries
+            for (const party of createdParties) {
+              if (!party || !party.party_id) continue;
+              try {
+                const caseLawyerRelation = await CaseLawyer.create({
+                  case_id: caseId,
+                  lawyer_id: null, // No lawyer for this case
+                  party_id: party.party_id,
+                  user_id: userId
+                });
+                createdCaseLawyers.push(caseLawyerRelation);
+              } catch (error) {
+                console.error(`Error creating case-party relationship for case ${caseObj.caseCode} (party: ${party.party_id}):`, error);
+              }
+            }
+            console.log(`Created case-party relationships for case ${caseObj.caseCode} with no lawyers. Parties: ${createdParties.length}`);
           } else {
             console.log(`No lawyers or parties to create relationships for case ${caseObj.caseCode}. Lawyers: ${createdLawyers.length}, Parties: ${createdParties.length}`);
           }

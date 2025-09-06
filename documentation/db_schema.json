@@ -8,7 +8,7 @@
   "table_name": "case_lawyers",
   "column_name": "lawyer_id",
   "data_type": "integer",
-  "is_nullable": "NO",
+  "is_nullable": "YES",
   "column_default": null
 }, {
   "table_name": "case_lawyers",
@@ -22,6 +22,12 @@
   "data_type": "integer",
   "is_nullable": "YES",
   "column_default": null
+}, {
+  "table_name": "case_lawyers",
+  "column_name": "id",
+  "data_type": "integer",
+  "is_nullable": "NO",
+  "column_default": "nextval('case_lawyers_id_seq'::regclass)"
 }, {
   "table_name": "case_links",
   "column_name": "link_id",
