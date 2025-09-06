@@ -1,5 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const { query } = require('../lib/db');
 const Case = require('../models/Case');
 const CaseLawyer = require('../models/CaseLawyer');
 
