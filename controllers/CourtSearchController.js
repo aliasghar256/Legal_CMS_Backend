@@ -440,7 +440,7 @@ class CourtSearchController {
           }
 
           const caseData = {
-            cfms_case_code: parseInt(caseObj.caseCode),
+            cfms_case_code: caseObj.caseCode, // Store as string to preserve full case code
             case_number: caseNo,
             court_name: court,
             legal_section: underSection,
@@ -453,8 +453,12 @@ class CourtSearchController {
           };
 
           // Check if case already exists
+          console.log(`DEBUG: Checking for existing case with CFMS code: ${caseData.cfms_case_code}`);
           const existingCase = await Case.findByCfmsCaseCode(caseData.cfms_case_code);
+          console.log(`DEBUG: Existing case found:`, existingCase);
+          
           if (existingCase) {
+            console.log(`DEBUG: Case already exists - Case ID: ${existingCase.case_id}, Case Number: ${existingCase.case_number}`);
             results.failed.push({
               index: i,
               caseCode: caseObj.caseCode,

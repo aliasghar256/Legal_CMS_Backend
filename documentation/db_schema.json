@@ -144,6 +144,12 @@
   "column_default": null
 }, {
   "table_name": "cases",
+  "column_name": "shc_case_id",
+  "data_type": "integer",
+  "is_nullable": "YES",
+  "column_default": null
+}, {
+  "table_name": "cases",
   "column_name": "cfms_case_code",
   "data_type": "character varying",
   "is_nullable": "YES",

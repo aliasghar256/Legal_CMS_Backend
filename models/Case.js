@@ -14,7 +14,7 @@ class Case {
    * @param {string} [caseData.stage] - Case stage (optional)
    * @param {string} [caseData.description] - Case description (optional)
    * @param {string} [caseData.next_hearing] - Next hearing date (optional)
-   * @param {number} [caseData.cfms_case_code] - CFMS case code for court system integration (optional)
+   * @param {string} [caseData.cfms_case_code] - CFMS case code for court system integration (optional)
    * @param {number} [caseData.shc_case_id] - SHC case ID for Sindh High Court integration (optional)
    * @returns {Promise<Object>} Created case data
    */
@@ -498,7 +498,7 @@ class Case {
 
   /**
    * Find case by CFMS case code
-   * @param {number} cfms_case_code - CFMS case code from court system
+   * @param {string} cfms_case_code - CFMS case code from court system
    * @returns {Promise<Object|null>} Case data or null if not found
    */
   static async findByCfmsCaseCode(cfms_case_code) {
@@ -537,7 +537,7 @@ class Case {
         court_name: courtName,
         case_type: caseType,
         status: statusText,
-        cfms_case_code: parseInt(caseCode),
+        cfms_case_code: caseCode, // Store as string to preserve full case code
         description: parties,
         next_hearing: hearingDate !== 'NOT FOUND' ? hearingDate : null,
         filing_date: new Date().toISOString().split('T')[0] // Current date as filing date
