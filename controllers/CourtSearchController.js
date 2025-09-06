@@ -822,7 +822,8 @@ class CourtSearchController {
           // Create hearings
           const createdHearings = [];
           for (const hearingEntry of hearingHistory) {
-            if (hearingEntry.date && hearingEntry.diary) {
+            // Create hearing if we have a date, even if diary is empty
+            if (hearingEntry.date) {
               try {
                 let hearingDate = null;
                 if (hearingEntry.date) {
@@ -837,7 +838,7 @@ class CourtSearchController {
                     case_id: caseId,
                     judge_id: null,
                     date: hearingDate,
-                    description: hearingEntry.diary,
+                    description: hearingEntry.diary || '', // Allow empty diary entries
                     type: 'Regular'
                   });
                   createdHearings.push(hearing);
