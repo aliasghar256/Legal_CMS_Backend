@@ -15,6 +15,7 @@ class Case {
    * @param {string} [caseData.description] - Case description (optional)
    * @param {string} [caseData.next_hearing] - Next hearing date (optional)
    * @param {number} [caseData.cfms_case_code] - CFMS case code for court system integration (optional)
+   * @param {number} [caseData.shc_case_id] - SHC case ID for Sindh High Court integration (optional)
    * @returns {Promise<Object>} Created case data
    */
   static async create(caseData) {
@@ -30,17 +31,18 @@ class Case {
         stage = null,
         description = null,
         next_hearing = null,
-        cfms_case_code = null
+        cfms_case_code = null,
+        shc_case_id = null
       } = caseData;
 
       const result = await query(
         `INSERT INTO cases (case_number, court_id, court_name, case_type, legal_section, 
-                           filing_date, status, stage, description, next_hearing, cfms_case_code) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+                           filing_date, status, stage, description, next_hearing, cfms_case_code, shc_case_id) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
          RETURNING case_id, case_number, court_id, court_name, case_type, legal_section, 
-                   filing_date, status, stage, description, next_hearing, cfms_case_code`,
+                   filing_date, status, stage, description, next_hearing, cfms_case_code, shc_case_id`,
         [case_number, court_id, court_name, case_type, legal_section, 
-         filing_date, status, stage, description, next_hearing, cfms_case_code]
+         filing_date, status, stage, description, next_hearing, cfms_case_code, shc_case_id]
       );
 
       return result.rows[0];
@@ -612,6 +614,61 @@ class Case {
          ORDER BY next_hearing ASC`
       );
       return result.rows;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Find case by SHC case ID
+   * @param {number} shc_case_id - SHC case ID
+   * @returns {Promise<Object|null>} Case data or null if not found
+   */
+  static async findBySHCCaseId(shc_case_id) {
+    try {
+      const result = await query(
+        `SELECT case_id, case_number, court_id, court_name, case_type, legal_section, 
+                filing_date, status, stage, description, next_hearing, cfms_case_code, shc_case_id 
+         FROM cases WHERE shc_case_id = $1`,
+        [shc_case_id]
+      );
+      return result.rows[0] || null;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Create case from SHC search data
+   * @param {Object} shcData - Data from SHC search API
+   * @returns {Promise<Object>} Created case data
+   */
+  static async createFromSHCSearch(shcData) {
+    try {
+      const {
+        id,
+        caseNo,
+        caseName,
+        caseTitle,
+        circuitCode,
+        matter,
+        status,
+        nextDate
+      } = shcData;
+
+      const caseData = {
+        case_number: caseNo,
+        court_name: circuitCode || 'Sindh High Court',
+        case_type: caseName,
+        legal_section: matter,
+        status: status,
+        shc_case_id: parseInt(id),
+        description: caseTitle,
+        next_hearing: nextDate !== 'Not Available' ? nextDate : null,
+        filing_date: new Date().toISOString().split('T')[0] // Current date as filing date
+      };
+
+      return await this.create(caseData);
     } catch (error) {
       throw error;
     }

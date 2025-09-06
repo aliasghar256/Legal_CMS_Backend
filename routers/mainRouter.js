@@ -8,6 +8,7 @@ const judgeRouter = require('./judgeRouter')
 const partyRouter = require('./partyRouter')
 const userRouter = require('./userRouter')
 const courtSearchRouter = require('./courtSearchRouter')
+const shcSearchRouter = require('./shcSearch')
 const reminderRouter = require('./reminderRouter')
 const schedulerRouter = require('./schedulerRouter')
 
@@ -32,6 +33,7 @@ mainRouter.use('/judges', judgeRouter);
 mainRouter.use('/parties', partyRouter);
 mainRouter.use('/users', userRouter);
 mainRouter.use('/court-search', courtSearchRouter);
+mainRouter.use('/shc-search', shcSearchRouter);
 mainRouter.use('/reminders', reminderRouter);
 mainRouter.use('/scheduler', schedulerRouter);
 
