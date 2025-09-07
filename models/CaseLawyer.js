@@ -100,17 +100,13 @@ class CaseLawyer {
    */
   static async getCasesByUserId(user_id, limit = 20, offset = 0, status = null, case_type = null, court_id = null) {
     try {
+      // First, get distinct case IDs for the user with pagination
       let sql = `
         SELECT DISTINCT c.case_id, c.case_number, c.court_id, c.court_name, c.case_type, 
                c.legal_section, c.filing_date, c.status, c.stage, c.description, 
-               c.next_hearing, c.cfms_case_code,
-               cl.lawyer_id, cl.party_id,
-               l.name as lawyer_name, l.license_no,
-               p.name as party_name, p.role
+               c.next_hearing, c.cfms_case_code
         FROM case_lawyers cl
         INNER JOIN cases c ON cl.case_id = c.case_id
-        LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
-        INNER JOIN parties p ON cl.party_id = p.party_id
         WHERE cl.user_id = $1`;
       
       let params = [user_id];
@@ -144,6 +140,36 @@ class CaseLawyer {
 
       const result = await query(sql, params);
 
+      // Now get lawyer and party information for each case
+      const cases = [];
+      for (const caseRow of result.rows) {
+        const lawyersParties = await query(`
+          SELECT cl.lawyer_id, cl.party_id,
+                 l.name as lawyer_name, l.license_no,
+                 p.name as party_name, p.role
+          FROM case_lawyers cl
+          LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+          INNER JOIN parties p ON cl.party_id = p.party_id
+          WHERE cl.case_id = $1 AND cl.user_id = $2
+        `, [caseRow.case_id, user_id]);
+
+        // Add lawyer and party info to the case
+        if (lawyersParties.rows.length > 0) {
+          const firstRow = lawyersParties.rows[0];
+          cases.push({
+            ...caseRow,
+            lawyer_id: firstRow.lawyer_id,
+            party_id: firstRow.party_id,
+            lawyer_name: firstRow.lawyer_name,
+            license_no: firstRow.license_no,
+            party_name: firstRow.party_name,
+            role: firstRow.role
+          });
+        } else {
+          cases.push(caseRow);
+        }
+      }
+
       // Get total count for pagination
       let countSql = `
         SELECT COUNT(DISTINCT c.case_id) 
@@ -176,7 +202,7 @@ class CaseLawyer {
       const totalCases = parseInt(countResult.rows[0].count);
 
       return {
-        cases: result.rows,
+        cases: cases,
         pagination: {
           page: Math.floor(offset / limit) + 1,
           limit,
