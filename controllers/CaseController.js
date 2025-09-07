@@ -10,14 +10,21 @@ class CaseController {
   static async getUserCases(req, res) {
     try {
       const { page = 1, limit = 20, status, case_type, court_id } = req.query;
-      const offset = (page - 1) * limit;
+      
+      // Validate page and limit
+      const pageNum = Math.max(1, parseInt(page));
+      const limitNum = Math.min(Math.max(1, parseInt(limit)), 100); // Max 100 per page
+      const offset = (pageNum - 1) * limitNum;
+      
       const user_id = req.user.user_id;
       
-      // First, get all cases where the user is involved as a lawyer
+      console.log(`Getting user cases - Page: ${pageNum}, Limit: ${limitNum}, Offset: ${offset}`);
+      
+      // Get cases for the user
       const casesResult = await CaseLawyer.getCasesByUserId(
         user_id,
-        parseInt(limit), 
-        parseInt(offset), 
+        limitNum, 
+        offset, 
         status, 
         case_type, 
         court_id ? parseInt(court_id) : null

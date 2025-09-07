@@ -178,10 +178,13 @@ class CaseLawyer {
       return {
         cases: result.rows,
         pagination: {
+          page: Math.floor(offset / limit) + 1,
           limit,
           offset,
           total: totalCases,
-          hasMore: offset + limit < totalCases
+          totalPages: Math.ceil(totalCases / limit),
+          hasMore: offset + limit < totalCases,
+          hasPrevious: offset > 0
         }
       };
     } catch (error) {
