@@ -338,12 +338,203 @@ class Case {
         await client.query('DELETE FROM hearings WHERE case_id = $1', [case_id]);
         await client.query('DELETE FROM documents WHERE case_id = $1', [case_id]);
         await client.query('DELETE FROM case_references WHERE case_id = $1 OR cited_case_id = $1', [case_id]);
-        await client.query('DELETE FROM case_links WHERE case_id_1 = $1 OR case_id_2 = $1', [case_id]);
+        await client.query('DELETE FROM case_links WHERE parent_case_id = $1 OR child_case_id = $1', [case_id]);
 
         // Delete the case
         const result = await client.query('DELETE FROM cases WHERE case_id = $1 RETURNING case_id', [case_id]);
         
         return result.rows.length > 0;
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Delete case with all related data and optional deletion of associated parties and lawyers
+   * @param {number} case_id - Case ID
+   * @param {boolean} deleteParties - Whether to delete associated parties
+   * @param {boolean} deleteLawyers - Whether to delete associated lawyers
+   * @returns {Promise<Object>} Deletion summary with counts and warnings
+   */
+  static async deleteAdvanced(case_id, deleteParties = false, deleteLawyers = false) {
+    try {
+      return await transaction(async (client) => {
+        // First check if case exists
+        const caseExists = await client.query('SELECT case_id FROM cases WHERE case_id = $1', [case_id]);
+        if (caseExists.rows.length === 0) {
+          return null; // Case not found
+        }
+
+        const deletionSummary = {
+          caseId: case_id,
+          deletedRecords: {
+            case: 0,
+            hearings: 0,
+            documents: 0,
+            caseReferences: 0,
+            caseLinks: 0,
+            caseLawyers: 0,
+            parties: 0,
+            lawyers: 0,
+            userParties: 0,
+            userLawyers: 0
+          },
+          warnings: {
+            partiesNotDeleted: [],
+            lawyersNotDeleted: []
+          }
+        };
+
+        // Get associated parties and lawyers before deletion if needed
+        let associatedPartyIds = [];
+        let associatedLawyerIds = [];
+
+        if (deleteParties || deleteLawyers) {
+          const associations = await client.query(
+            'SELECT DISTINCT party_id, lawyer_id FROM case_lawyers WHERE case_id = $1',
+            [case_id]
+          );
+          
+          if (deleteParties) {
+            associatedPartyIds = [...new Set(associations.rows.map(row => row.party_id).filter(id => id))];
+          }
+          
+          if (deleteLawyers) {
+            associatedLawyerIds = [...new Set(associations.rows.map(row => row.lawyer_id).filter(id => id))];
+          }
+        }
+
+        // Delete case_lawyers first (this breaks the relationships)
+        const caseLawyersResult = await client.query('DELETE FROM case_lawyers WHERE case_id = $1', [case_id]);
+        deletionSummary.deletedRecords.caseLawyers = caseLawyersResult.rowCount;
+
+        // Delete hearings and count
+        const hearingsResult = await client.query('DELETE FROM hearings WHERE case_id = $1', [case_id]);
+        deletionSummary.deletedRecords.hearings = hearingsResult.rowCount;
+
+        // Delete documents and count
+        const documentsResult = await client.query('DELETE FROM documents WHERE case_id = $1', [case_id]);
+        deletionSummary.deletedRecords.documents = documentsResult.rowCount;
+
+        // Delete case references and count
+        const referencesResult = await client.query(
+          'DELETE FROM case_references WHERE case_id = $1 OR cited_case_id = $1', 
+          [case_id]
+        );
+        deletionSummary.deletedRecords.caseReferences = referencesResult.rowCount;
+
+        // Delete case links and count
+        const linksResult = await client.query(
+          'DELETE FROM case_links WHERE parent_case_id = $1 OR child_case_id = $1', 
+          [case_id]
+        );
+        deletionSummary.deletedRecords.caseLinks = linksResult.rowCount;
+
+        // Delete reminders associated with this case
+        await client.query(`
+          DELETE FROM user_reminders WHERE case_id = $1
+        `, [case_id]);
+
+        // Handle party deletion with association checks
+        if (deleteParties && associatedPartyIds.length > 0) {
+          const partiesToDelete = [];
+          const partiesNotToDelete = [];
+
+          for (const partyId of associatedPartyIds) {
+            // Check if party is associated with other cases
+            const otherCaseAssociations = await client.query(
+              'SELECT COUNT(*) as count FROM case_lawyers WHERE party_id = $1 AND case_id != $2',
+              [partyId, case_id]
+            );
+
+            if (parseInt(otherCaseAssociations.rows[0].count) === 0) {
+              partiesToDelete.push(partyId);
+            } else {
+              // Get party details for warning message
+              const partyDetails = await client.query(
+                'SELECT name FROM parties WHERE party_id = $1',
+                [partyId]
+              );
+              partiesNotToDelete.push({
+                id: partyId,
+                name: partyDetails.rows[0]?.name || 'Unknown',
+                reason: 'Associated with other cases'
+              });
+            }
+          }
+
+          deletionSummary.warnings.partiesNotDeleted = partiesNotToDelete;
+
+          if (partiesToDelete.length > 0) {
+            // First delete user_parties relationships
+            const userPartiesResult = await client.query(
+              'DELETE FROM user_parties WHERE party_id = ANY($1)',
+              [partiesToDelete]
+            );
+            deletionSummary.deletedRecords.userParties = userPartiesResult.rowCount;
+
+            // Then delete the parties themselves
+            const partiesResult = await client.query(
+              'DELETE FROM parties WHERE party_id = ANY($1)',
+              [partiesToDelete]
+            );
+            deletionSummary.deletedRecords.parties = partiesResult.rowCount;
+          }
+        }
+
+        // Handle lawyer deletion with association checks
+        if (deleteLawyers && associatedLawyerIds.length > 0) {
+          const lawyersToDelete = [];
+          const lawyersNotToDelete = [];
+
+          for (const lawyerId of associatedLawyerIds) {
+            // Check if lawyer is associated with other cases
+            const otherCaseAssociations = await client.query(
+              'SELECT COUNT(*) as count FROM case_lawyers WHERE lawyer_id = $1 AND case_id != $2',
+              [lawyerId, case_id]
+            );
+
+            if (parseInt(otherCaseAssociations.rows[0].count) === 0) {
+              lawyersToDelete.push(lawyerId);
+            } else {
+              // Get lawyer details for warning message
+              const lawyerDetails = await client.query(
+                'SELECT name FROM lawyers WHERE lawyer_id = $1',
+                [lawyerId]
+              );
+              lawyersNotToDelete.push({
+                id: lawyerId,
+                name: lawyerDetails.rows[0]?.name || 'Unknown',
+                reason: 'Associated with other cases'
+              });
+            }
+          }
+
+          deletionSummary.warnings.lawyersNotDeleted = lawyersNotToDelete;
+
+          if (lawyersToDelete.length > 0) {
+            // First delete user_lawyers relationships
+            const userLawyersResult = await client.query(
+              'DELETE FROM user_lawyers WHERE lawyer_id = ANY($1)',
+              [lawyersToDelete]
+            );
+            deletionSummary.deletedRecords.userLawyers = userLawyersResult.rowCount;
+
+            // Then delete the lawyers themselves
+            const lawyersResult = await client.query(
+              'DELETE FROM lawyers WHERE lawyer_id = ANY($1)',
+              [lawyersToDelete]
+            );
+            deletionSummary.deletedRecords.lawyers = lawyersResult.rowCount;
+          }
+        }
+
+        // Finally, delete the case itself
+        const caseResult = await client.query('DELETE FROM cases WHERE case_id = $1', [case_id]);
+        deletionSummary.deletedRecords.case = caseResult.rowCount;
+        
+        return deletionSummary;
       });
     } catch (error) {
       throw error;

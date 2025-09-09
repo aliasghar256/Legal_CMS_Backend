@@ -185,6 +185,63 @@ class Party {
   }
 
   /**
+   * Delete party with case association checking
+   * @param {number} party_id - Party ID
+   * @returns {Promise<Object>} Deletion result with details
+   */
+  static async deleteWithValidation(party_id) {
+    try {
+      // First check if party exists
+      const party = await this.findById(party_id);
+      if (!party) {
+        return {
+          success: false,
+          message: 'Party not found',
+          code: 'PARTY_NOT_FOUND'
+        };
+      }
+
+      // Check if party is associated with any cases
+      const caseAssociations = await query(
+        `SELECT c.case_id, c.case_number, c.case_type, c.status 
+         FROM case_lawyers cl
+         INNER JOIN cases c ON cl.case_id = c.case_id
+         WHERE cl.party_id = $1
+         ORDER BY c.case_number`,
+        [party_id]
+      );
+
+      if (caseAssociations.rows.length > 0) {
+        return {
+          success: false,
+          message: `Cannot delete party "${party.name}" because it is associated with ${caseAssociations.rows.length} case(s). Please delete or update the associated cases first.`,
+          code: 'PARTY_HAS_CASE_ASSOCIATIONS',
+          associatedCases: caseAssociations.rows,
+          partyDetails: party
+        };
+      }
+
+      // If no case associations, proceed with deletion
+      // First delete from user_parties table
+      await query('DELETE FROM user_parties WHERE party_id = $1', [party_id]);
+
+      // Then delete the party
+      const deleteResult = await query(
+        'DELETE FROM parties WHERE party_id = $1 RETURNING party_id',
+        [party_id]
+      );
+
+      return {
+        success: true,
+        message: `Party "${party.name}" deleted successfully`,
+        deletedParty: party
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
    * Get parties associated with a specific case
    * @param {number} case_id - Case ID
    * @returns {Promise<Array>} Array of parties associated with the case

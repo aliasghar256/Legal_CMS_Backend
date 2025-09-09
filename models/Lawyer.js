@@ -166,6 +166,64 @@ class Lawyer {
   }
 
   /**
+   * Delete lawyer with case association checking
+   * @param {number} lawyer_id - Lawyer ID
+   * @returns {Promise<Object>} Deletion result with details
+   */
+  static async deleteWithValidation(lawyer_id) {
+    try {
+      // First check if lawyer exists
+      const lawyer = await this.findById(lawyer_id);
+      if (!lawyer) {
+        return {
+          success: false,
+          message: 'Lawyer not found',
+          code: 'LAWYER_NOT_FOUND'
+        };
+      }
+
+      // Check if lawyer is associated with any cases
+      const caseAssociations = await query(
+        `SELECT c.case_id, c.case_number, c.case_type, c.status, p.name as party_name, p.role as party_role
+         FROM case_lawyers cl
+         INNER JOIN cases c ON cl.case_id = c.case_id
+         INNER JOIN parties p ON cl.party_id = p.party_id
+         WHERE cl.lawyer_id = $1
+         ORDER BY c.case_number`,
+        [lawyer_id]
+      );
+
+      if (caseAssociations.rows.length > 0) {
+        return {
+          success: false,
+          message: `Cannot delete lawyer "${lawyer.name}" because they are associated with ${caseAssociations.rows.length} case(s). Please delete or update the associated cases first.`,
+          code: 'LAWYER_HAS_CASE_ASSOCIATIONS',
+          associatedCases: caseAssociations.rows,
+          lawyerDetails: lawyer
+        };
+      }
+
+      // If no case associations, proceed with deletion
+      // First delete from user_lawyers table
+      await query('DELETE FROM user_lawyers WHERE lawyer_id = $1', [lawyer_id]);
+
+      // Then delete the lawyer
+      const deleteResult = await query(
+        'DELETE FROM lawyers WHERE lawyer_id = $1 RETURNING lawyer_id',
+        [lawyer_id]
+      );
+
+      return {
+        success: true,
+        message: `Lawyer "${lawyer.name}" deleted successfully`,
+        deletedLawyer: lawyer
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
    * Check if license number already exists
    * @param {string} license_no - License number to check
    * @param {number} [excludeLawyerId] - Lawyer ID to exclude from check

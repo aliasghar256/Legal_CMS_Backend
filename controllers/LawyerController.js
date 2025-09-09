@@ -191,7 +191,7 @@ class LawyerController {
   }
 
   /**
-   * Delete lawyer
+   * Delete lawyer with case association validation
    */
   static async delete(req, res) {
     try {
@@ -204,18 +204,45 @@ class LawyerController {
         });
       }
 
-      const deleted = await Lawyer.delete(parseInt(id));
+      const lawyerId = parseInt(id);
+      const deletionResult = await Lawyer.deleteWithValidation(lawyerId);
 
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: 'Lawyer not found'
-        });
+      if (!deletionResult.success) {
+        // Handle specific error codes
+        switch (deletionResult.code) {
+          case 'LAWYER_NOT_FOUND':
+            return res.status(404).json({
+              success: false,
+              message: deletionResult.message,
+              code: deletionResult.code
+            });
+          
+          case 'LAWYER_HAS_CASE_ASSOCIATIONS':
+            return res.status(400).json({
+              success: false,
+              message: deletionResult.message,
+              code: deletionResult.code,
+              data: {
+                lawyerDetails: deletionResult.lawyerDetails,
+                associatedCases: deletionResult.associatedCases
+              }
+            });
+          
+          default:
+            return res.status(400).json({
+              success: false,
+              message: deletionResult.message,
+              code: deletionResult.code
+            });
+        }
       }
 
       res.status(200).json({
         success: true,
-        message: 'Lawyer deleted successfully'
+        message: deletionResult.message,
+        data: {
+          deletedLawyer: deletionResult.deletedLawyer
+        }
       });
     } catch (error) {
       console.error('Error deleting lawyer:', error);

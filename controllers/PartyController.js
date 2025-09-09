@@ -192,7 +192,7 @@ class PartyController {
   }
 
   /**
-   * Delete party
+   * Delete party with case association validation
    */
   static async delete(req, res) {
     try {
@@ -205,18 +205,45 @@ class PartyController {
         });
       }
 
-      const deleted = await Party.delete(parseInt(id));
+      const partyId = parseInt(id);
+      const deletionResult = await Party.deleteWithValidation(partyId);
 
-      if (!deleted) {
-        return res.status(404).json({
-          success: false,
-          message: 'Party not found'
-        });
+      if (!deletionResult.success) {
+        // Handle specific error codes
+        switch (deletionResult.code) {
+          case 'PARTY_NOT_FOUND':
+            return res.status(404).json({
+              success: false,
+              message: deletionResult.message,
+              code: deletionResult.code
+            });
+          
+          case 'PARTY_HAS_CASE_ASSOCIATIONS':
+            return res.status(400).json({
+              success: false,
+              message: deletionResult.message,
+              code: deletionResult.code,
+              data: {
+                partyDetails: deletionResult.partyDetails,
+                associatedCases: deletionResult.associatedCases
+              }
+            });
+          
+          default:
+            return res.status(400).json({
+              success: false,
+              message: deletionResult.message,
+              code: deletionResult.code
+            });
+        }
       }
 
       res.status(200).json({
         success: true,
-        message: 'Party deleted successfully'
+        message: deletionResult.message,
+        data: {
+          deletedParty: deletionResult.deletedParty
+        }
       });
     } catch (error) {
       console.error('Error deleting party:', error);

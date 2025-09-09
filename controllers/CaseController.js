@@ -290,6 +290,54 @@ class CaseController {
       });
     }
   }
+
+  // Advanced delete case with optional party and lawyer deletion
+  static async deleteCaseAdvanced(req, res) {
+    try {
+      const caseId = parseInt(req.params.id);
+      
+      if (isNaN(caseId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid case ID'
+        });
+      }
+
+      // Extract query parameters for delete options
+      const deleteParties = req.query.deleteParties === 'true';
+      const deleteLawyers = req.query.deleteLawyers === 'true';
+
+      console.log(`Advanced delete case ${caseId} - Delete Parties: ${deleteParties}, Delete Lawyers: ${deleteLawyers}`);
+
+      const deletionResult = await Case.deleteAdvanced(caseId, deleteParties, deleteLawyers);
+      
+      if (!deletionResult) {
+        return res.status(404).json({
+          success: false,
+          message: 'Case not found'
+        });
+      }
+      
+      res.json({
+        success: true,
+        message: 'Case and related data deleted successfully',
+        data: {
+          deletionSummary: deletionResult,
+          options: {
+            deleteParties,
+            deleteLawyers
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error in deleteCaseAdvanced:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = CaseController;

@@ -22,7 +22,10 @@ router.post('/', authMiddleware,CaseController.createCase);
 // Update case
 router.put('/:id', CaseController.updateCase);
 
-// Delete case
+// Delete case (basic deletion)
 router.delete('/:id', CaseController.deleteCase);
+
+// Advanced delete case with optional party and lawyer deletion
+router.delete('/:id/advanced', CaseController.deleteCaseAdvanced);
 
 module.exports = router;
