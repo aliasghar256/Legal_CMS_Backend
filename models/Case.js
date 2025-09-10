@@ -940,6 +940,348 @@ class Case {
       throw error;
     }
   }
+
+  /**
+   * Update parties associated with a case
+   * @param {number} case_id - Case ID
+   * @param {string} action - 'add' or 'remove'
+   * @param {Array<number>} party_ids - Array of party IDs
+   * @param {number|null} lawyer_id - Lawyer ID (required for 'add' action)
+   * @param {number} user_id - User ID
+   * @returns {Promise<Object>} Update result
+   */
+  static async updateParties(case_id, action, party_ids, lawyer_id, user_id) {
+    try {
+      return await transaction(async (client) => {
+        // Check if case exists
+        const caseExists = await client.query('SELECT case_id, case_number FROM cases WHERE case_id = $1', [case_id]);
+        if (caseExists.rows.length === 0) {
+          return {
+            success: false,
+            message: 'Case not found'
+          };
+        }
+
+        const caseInfo = caseExists.rows[0];
+        const results = [];
+        const errors = [];
+
+        if (action === 'add') {
+          // Validate lawyer exists if provided
+          if (lawyer_id) {
+            const lawyerExists = await client.query('SELECT lawyer_id FROM lawyers WHERE lawyer_id = $1', [lawyer_id]);
+            if (lawyerExists.rows.length === 0) {
+              return {
+                success: false,
+                message: 'Lawyer not found'
+              };
+            }
+          }
+
+          // Add parties to case
+          for (const party_id of party_ids) {
+            try {
+              // Check if party exists
+              const partyExists = await client.query('SELECT party_id, name FROM parties WHERE party_id = $1', [party_id]);
+              if (partyExists.rows.length === 0) {
+                errors.push(`Party with ID ${party_id} not found`);
+                continue;
+              }
+
+              const partyInfo = partyExists.rows[0];
+
+              // Check if this association already exists
+              const existingAssociation = await client.query(
+                'SELECT * FROM case_lawyers WHERE case_id = $1 AND party_id = $2 AND lawyer_id = $3 AND user_id = $4',
+                [case_id, party_id, lawyer_id, user_id]
+              );
+
+              if (existingAssociation.rows.length > 0) {
+                errors.push(`Party "${partyInfo.name}" is already associated with this case for this lawyer`);
+                continue;
+              }
+
+              // Add the association
+              await client.query(
+                'INSERT INTO case_lawyers (case_id, party_id, lawyer_id, user_id) VALUES ($1, $2, $3, $4)',
+                [case_id, party_id, lawyer_id, user_id]
+              );
+
+              results.push({
+                party_id: party_id,
+                party_name: partyInfo.name,
+                action: 'added'
+              });
+            } catch (error) {
+              errors.push(`Error adding party ${party_id}: ${error.message}`);
+            }
+          }
+        } else if (action === 'remove') {
+          // Remove parties from case
+          for (const party_id of party_ids) {
+            try {
+              // Get party info before deletion
+              const partyInfo = await client.query('SELECT party_id, name FROM parties WHERE party_id = $1', [party_id]);
+              const partyName = partyInfo.rows[0]?.name || `Party ${party_id}`;
+
+              // Remove the user's associations with this party for this case
+              const deleteResult = await client.query(
+                'DELETE FROM case_lawyers WHERE case_id = $1 AND party_id = $2 AND user_id = $3 RETURNING *',
+                [case_id, party_id, user_id]
+              );
+
+              if (deleteResult.rows.length > 0) {
+                results.push({
+                  party_id: party_id,
+                  party_name: partyName,
+                  action: 'removed',
+                  associations_removed: deleteResult.rows.length
+                });
+              } else {
+                errors.push(`No association found between party "${partyName}" and this case for your account`);
+              }
+            } catch (error) {
+              errors.push(`Error removing party ${party_id}: ${error.message}`);
+            }
+          }
+        }
+
+        const successCount = results.length;
+        const errorCount = errors.length;
+        
+        let message = `${action === 'add' ? 'Added' : 'Removed'} ${successCount} part${successCount === 1 ? 'y' : 'ies'}`;
+        if (errorCount > 0) {
+          message += `. ${errorCount} error(s) occurred`;
+        }
+
+        return {
+          success: true,
+          message: message,
+          data: {
+            case_id: case_id,
+            case_number: caseInfo.case_number,
+            action: action,
+            results: results,
+            errors: errors,
+            summary: {
+              success_count: successCount,
+              error_count: errorCount
+            }
+          }
+        };
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Update lawyers associated with a case
+   * @param {number} case_id - Case ID
+   * @param {string} action - 'add' or 'remove'
+   * @param {Array<number>} lawyer_ids - Array of lawyer IDs
+   * @param {number|null} party_id - Party ID (required for 'add' action)
+   * @param {number} user_id - User ID
+   * @returns {Promise<Object>} Update result
+   */
+  static async updateLawyers(case_id, action, lawyer_ids, party_id, user_id) {
+    try {
+      return await transaction(async (client) => {
+        // Check if case exists
+        const caseExists = await client.query('SELECT case_id, case_number FROM cases WHERE case_id = $1', [case_id]);
+        if (caseExists.rows.length === 0) {
+          return {
+            success: false,
+            message: 'Case not found'
+          };
+        }
+
+        const caseInfo = caseExists.rows[0];
+        const results = [];
+        const errors = [];
+
+        if (action === 'add') {
+          // Validate party exists if provided
+          if (party_id) {
+            const partyExists = await client.query('SELECT party_id FROM parties WHERE party_id = $1', [party_id]);
+            if (partyExists.rows.length === 0) {
+              return {
+                success: false,
+                message: 'Party not found'
+              };
+            }
+          }
+
+          // Add lawyers to case
+          for (const lawyer_id of lawyer_ids) {
+            try {
+              // Check if lawyer exists
+              const lawyerExists = await client.query('SELECT lawyer_id, name FROM lawyers WHERE lawyer_id = $1', [lawyer_id]);
+              if (lawyerExists.rows.length === 0) {
+                errors.push(`Lawyer with ID ${lawyer_id} not found`);
+                continue;
+              }
+
+              const lawyerInfo = lawyerExists.rows[0];
+
+              // Check if this association already exists
+              const existingAssociation = await client.query(
+                'SELECT * FROM case_lawyers WHERE case_id = $1 AND lawyer_id = $2 AND party_id = $3 AND user_id = $4',
+                [case_id, lawyer_id, party_id, user_id]
+              );
+
+              if (existingAssociation.rows.length > 0) {
+                errors.push(`Lawyer "${lawyerInfo.name}" is already associated with this case for this party`);
+                continue;
+              }
+
+              // Add the association
+              await client.query(
+                'INSERT INTO case_lawyers (case_id, lawyer_id, party_id, user_id) VALUES ($1, $2, $3, $4)',
+                [case_id, lawyer_id, party_id, user_id]
+              );
+
+              results.push({
+                lawyer_id: lawyer_id,
+                lawyer_name: lawyerInfo.name,
+                action: 'added'
+              });
+            } catch (error) {
+              errors.push(`Error adding lawyer ${lawyer_id}: ${error.message}`);
+            }
+          }
+        } else if (action === 'remove') {
+          // Remove lawyers from case
+          for (const lawyer_id of lawyer_ids) {
+            try {
+              // Get lawyer info before deletion
+              const lawyerInfo = await client.query('SELECT lawyer_id, name FROM lawyers WHERE lawyer_id = $1', [lawyer_id]);
+              const lawyerName = lawyerInfo.rows[0]?.name || `Lawyer ${lawyer_id}`;
+
+              // Remove the user's associations with this lawyer for this case
+              const deleteResult = await client.query(
+                'DELETE FROM case_lawyers WHERE case_id = $1 AND lawyer_id = $2 AND user_id = $3 RETURNING *',
+                [case_id, lawyer_id, user_id]
+              );
+
+              if (deleteResult.rows.length > 0) {
+                results.push({
+                  lawyer_id: lawyer_id,
+                  lawyer_name: lawyerName,
+                  action: 'removed',
+                  associations_removed: deleteResult.rows.length
+                });
+              } else {
+                errors.push(`No association found between lawyer "${lawyerName}" and this case for your account`);
+              }
+            } catch (error) {
+              errors.push(`Error removing lawyer ${lawyer_id}: ${error.message}`);
+            }
+          }
+        }
+
+        const successCount = results.length;
+        const errorCount = errors.length;
+        
+        let message = `${action === 'add' ? 'Added' : 'Removed'} ${successCount} lawyer${successCount === 1 ? '' : 's'}`;
+        if (errorCount > 0) {
+          message += `. ${errorCount} error(s) occurred`;
+        }
+
+        return {
+          success: true,
+          message: message,
+          data: {
+            case_id: case_id,
+            case_number: caseInfo.case_number,
+            action: action,
+            results: results,
+            errors: errors,
+            summary: {
+              success_count: successCount,
+              error_count: errorCount
+            }
+          }
+        };
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get all associations (parties and lawyers) for a case by user
+   * @param {number} case_id - Case ID
+   * @param {number} user_id - User ID
+   * @returns {Promise<Object>} Case associations
+   */
+  static async getAssociations(case_id, user_id) {
+    try {
+      // Check if case exists
+      const caseExists = await query('SELECT case_id, case_number FROM cases WHERE case_id = $1', [case_id]);
+      if (caseExists.rows.length === 0) {
+        return {
+          success: false,
+          message: 'Case not found'
+        };
+      }
+
+      const caseInfo = caseExists.rows[0];
+
+      // Get all case-lawyer associations for this user and case
+      const associations = await query(
+        `SELECT cl.case_id, cl.lawyer_id, cl.party_id,
+                l.name as lawyer_name, l.license_no, l.email as lawyer_email,
+                p.name as party_name, p.cnic, p.role, p.email as party_email
+         FROM case_lawyers cl
+         LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+         INNER JOIN parties p ON cl.party_id = p.party_id
+         WHERE cl.case_id = $1 AND cl.user_id = $2
+         ORDER BY p.name, l.name`,
+        [case_id, user_id]
+      );
+
+      // Group by parties and their associated lawyers
+      const partiesMap = new Map();
+      
+      associations.rows.forEach(row => {
+        if (!partiesMap.has(row.party_id)) {
+          partiesMap.set(row.party_id, {
+            party_id: row.party_id,
+            party_name: row.party_name,
+            cnic: row.cnic,
+            role: row.role,
+            party_email: row.party_email,
+            lawyers: []
+          });
+        }
+        
+        if (row.lawyer_id) {
+          partiesMap.get(row.party_id).lawyers.push({
+            lawyer_id: row.lawyer_id,
+            lawyer_name: row.lawyer_name,
+            license_no: row.license_no,
+            lawyer_email: row.lawyer_email
+          });
+        }
+      });
+
+      const parties = Array.from(partiesMap.values());
+
+      return {
+        success: true,
+        data: {
+          case_id: case_id,
+          case_number: caseInfo.case_number,
+          parties: parties,
+          total_parties: parties.length,
+          total_associations: associations.rows.length
+        }
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = Case;

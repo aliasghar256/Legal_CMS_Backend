@@ -340,6 +340,167 @@ class CaseController {
       });
     }
   }
+
+  // Update case parties (add or remove parties from a case)
+  static async updateCaseParties(req, res) {
+    try {
+      const caseId = parseInt(req.params.id);
+      const { action, party_ids, lawyer_id } = req.body;
+      const user_id = req.user.user_id;
+
+      if (isNaN(caseId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid case ID'
+        });
+      }
+
+      // Validate action
+      if (!['add', 'remove'].includes(action)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Action must be either "add" or "remove"'
+        });
+      }
+
+      // Validate party_ids
+      if (!Array.isArray(party_ids) || party_ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'party_ids must be a non-empty array'
+        });
+      }
+
+      // For adding parties, lawyer_id is required
+      if (action === 'add' && !lawyer_id) {
+        return res.status(400).json({
+          success: false,
+          message: 'lawyer_id is required when adding parties'
+        });
+      }
+
+      const result = await Case.updateParties(caseId, action, party_ids, lawyer_id, user_id);
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.message
+        });
+      }
+
+      res.json({
+        success: true,
+        message: result.message,
+        data: result.data
+      });
+    } catch (error) {
+      console.error('Error in updateCaseParties:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+
+  // Update case lawyers (add or remove lawyers from a case)
+  static async updateCaseLawyers(req, res) {
+    try {
+      const caseId = parseInt(req.params.id);
+      const { action, lawyer_ids, party_id } = req.body;
+      const user_id = req.user.user_id;
+
+      if (isNaN(caseId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid case ID'
+        });
+      }
+
+      // Validate action
+      if (!['add', 'remove'].includes(action)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Action must be either "add" or "remove"'
+        });
+      }
+
+      // Validate lawyer_ids
+      if (!Array.isArray(lawyer_ids) || lawyer_ids.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'lawyer_ids must be a non-empty array'
+        });
+      }
+
+      // For adding lawyers, party_id is required
+      if (action === 'add' && !party_id) {
+        return res.status(400).json({
+          success: false,
+          message: 'party_id is required when adding lawyers'
+        });
+      }
+
+      const result = await Case.updateLawyers(caseId, action, lawyer_ids, party_id, user_id);
+
+      if (!result.success) {
+        return res.status(400).json({
+          success: false,
+          message: result.message
+        });
+      }
+
+      res.json({
+        success: true,
+        message: result.message,
+        data: result.data
+      });
+    } catch (error) {
+      console.error('Error in updateCaseLawyers:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+
+  // Get parties and lawyers associated with a case
+  static async getCaseAssociations(req, res) {
+    try {
+      const caseId = parseInt(req.params.id);
+      const user_id = req.user.user_id;
+
+      if (isNaN(caseId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid case ID'
+        });
+      }
+
+      const associations = await Case.getAssociations(caseId, user_id);
+
+      if (!associations.success) {
+        return res.status(404).json({
+          success: false,
+          message: associations.message
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Case associations retrieved successfully',
+        data: associations.data
+      });
+    } catch (error) {
+      console.error('Error in getCaseAssociations:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = CaseController;

@@ -22,8 +22,17 @@ router.post('/', authMiddleware,CaseController.createCase);
 // Update case
 router.put('/:id', CaseController.updateCase);
 
+// Update case parties (add/remove parties from a case)
+router.put('/:id/parties', authMiddleware, CaseController.updateCaseParties);
+
+// Update case lawyers (add/remove lawyers from a case)  
+router.put('/:id/lawyers', authMiddleware, CaseController.updateCaseLawyers);
+
+// Get case associations (parties and lawyers)
+router.get('/:id/associations', authMiddleware, CaseController.getCaseAssociations);
+
 // Delete case (basic deletion)
-router.delete('/:id', CaseController.deleteCase);
+router.delete('/:id', authMiddleware, CaseController.deleteCase);
 
 // Advanced delete case with optional party and lawyer deletion
 router.delete('/:id/advanced', CaseController.deleteCaseAdvanced);
