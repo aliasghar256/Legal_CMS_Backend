@@ -191,11 +191,12 @@ class LawyerController {
   }
 
   /**
-   * Delete lawyer with case association validation
+   * Delete lawyer with case association validation (user-specific)
    */
   static async delete(req, res) {
     try {
       const { id } = req.params;
+      const user_id = req.user.user_id;
 
       if (!id || isNaN(parseInt(id))) {
         return res.status(400).json({
@@ -205,7 +206,7 @@ class LawyerController {
       }
 
       const lawyerId = parseInt(id);
-      const deletionResult = await Lawyer.deleteWithValidation(lawyerId);
+      const deletionResult = await Lawyer.deleteWithValidation(lawyerId, user_id);
 
       if (!deletionResult.success) {
         // Handle specific error codes
@@ -241,7 +242,8 @@ class LawyerController {
         success: true,
         message: deletionResult.message,
         data: {
-          deletedLawyer: deletionResult.deletedLawyer
+          deletedLawyer: deletionResult.deletedLawyer,
+          lawyerStillExists: deletionResult.lawyerStillExists || false
         }
       });
     } catch (error) {

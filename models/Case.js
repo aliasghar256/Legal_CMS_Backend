@@ -326,6 +326,82 @@ class Case {
   }
 
   /**
+   * Delete user's association with a case (removes user from case_lawyers, doesn't delete the case itself)
+   * @param {number} case_id - Case ID
+   * @param {number} user_id - User ID
+   * @returns {Promise<Object>} Deletion result with details
+   */
+  static async deleteUserAssociation(case_id, user_id) {
+    try {
+      return await transaction(async (client) => {
+        // First check if the case exists
+        const caseExists = await client.query('SELECT case_id, case_number FROM cases WHERE case_id = $1', [case_id]);
+        if (caseExists.rows.length === 0) {
+          return {
+            success: false,
+            message: 'Case not found'
+          };
+        }
+
+        const caseInfo = caseExists.rows[0];
+
+        // Check if user has any associations with this case
+        const userAssociations = await client.query(
+          'SELECT * FROM case_lawyers WHERE case_id = $1 AND user_id = $2',
+          [case_id, user_id]
+        );
+
+        if (userAssociations.rows.length === 0) {
+          return {
+            success: false,
+            message: 'You are not associated with this case'
+          };
+        }
+
+        // Delete user's associations from case_lawyers
+        const deletedAssociations = await client.query(
+          'DELETE FROM case_lawyers WHERE case_id = $1 AND user_id = $2 RETURNING *',
+          [case_id, user_id]
+        );
+
+        // Delete user's reminders for this case
+        await client.query(
+          'DELETE FROM user_reminders WHERE case_id = $1 AND user_id = $2',
+          [case_id, user_id]
+        );
+
+        // Check if anyone else is still associated with this case
+        const remainingAssociations = await client.query(
+          'SELECT COUNT(*) as count FROM case_lawyers WHERE case_id = $1',
+          [case_id]
+        );
+
+        const remainingCount = parseInt(remainingAssociations.rows[0].count);
+        let message = `Your association with case "${caseInfo.case_number}" has been removed successfully`;
+        
+        // If no one else is associated, we could optionally delete the case entirely
+        // For now, we'll just log it and leave the case in the database
+        if (remainingCount === 0) {
+          message += '. Note: This case has no remaining user associations';
+        }
+
+        return {
+          success: true,
+          message: message,
+          data: {
+            case_id: case_id,
+            case_number: caseInfo.case_number,
+            removed_associations: deletedAssociations.rowCount,
+            remaining_associations: remainingCount
+          }
+        };
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
    * Delete case with all related data
    * @param {number} case_id - Case ID
    * @returns {Promise<boolean>} True if deleted, false if not found

@@ -166,11 +166,12 @@ class Lawyer {
   }
 
   /**
-   * Delete lawyer with case association checking
+   * Delete lawyer with case association checking (user-specific)
    * @param {number} lawyer_id - Lawyer ID
+   * @param {number} user_id - User ID to check associations for
    * @returns {Promise<Object>} Deletion result with details
    */
-  static async deleteWithValidation(lawyer_id) {
+  static async deleteWithValidation(lawyer_id, user_id = null) {
     try {
       // First check if lawyer exists
       const lawyer = await this.findById(lawyer_id);
@@ -182,42 +183,88 @@ class Lawyer {
         };
       }
 
-      // Check if lawyer is associated with any cases
-      const caseAssociations = await query(
-        `SELECT c.case_id, c.case_number, c.case_type, c.status, p.name as party_name, p.role as party_role
-         FROM case_lawyers cl
-         INNER JOIN cases c ON cl.case_id = c.case_id
-         INNER JOIN parties p ON cl.party_id = p.party_id
-         WHERE cl.lawyer_id = $1
-         ORDER BY c.case_number`,
-        [lawyer_id]
-      );
+      let caseAssociations;
+      if (user_id) {
+        // Check if lawyer is associated with any cases for this specific user
+        caseAssociations = await query(
+          `SELECT c.case_id, c.case_number, c.case_type, c.status, p.name as party_name, p.role as party_role
+           FROM case_lawyers cl
+           INNER JOIN cases c ON cl.case_id = c.case_id
+           INNER JOIN parties p ON cl.party_id = p.party_id
+           WHERE cl.lawyer_id = $1 AND cl.user_id = $2
+           ORDER BY c.case_number`,
+          [lawyer_id, user_id]
+        );
+      } else {
+        // Check if lawyer is associated with any cases (global check)
+        caseAssociations = await query(
+          `SELECT c.case_id, c.case_number, c.case_type, c.status, p.name as party_name, p.role as party_role
+           FROM case_lawyers cl
+           INNER JOIN cases c ON cl.case_id = c.case_id
+           INNER JOIN parties p ON cl.party_id = p.party_id
+           WHERE cl.lawyer_id = $1
+           ORDER BY c.case_number`,
+          [lawyer_id]
+        );
+      }
 
       if (caseAssociations.rows.length > 0) {
+        const message = user_id 
+          ? `Cannot delete lawyer "${lawyer.name}" because they are associated with ${caseAssociations.rows.length} case(s) for your account. Please remove the lawyer from those cases first.`
+          : `Cannot delete lawyer "${lawyer.name}" because they are associated with ${caseAssociations.rows.length} case(s). Please delete or update the associated cases first.`;
+        
         return {
           success: false,
-          message: `Cannot delete lawyer "${lawyer.name}" because they are associated with ${caseAssociations.rows.length} case(s). Please delete or update the associated cases first.`,
+          message: message,
           code: 'LAWYER_HAS_CASE_ASSOCIATIONS',
           associatedCases: caseAssociations.rows,
           lawyerDetails: lawyer
         };
       }
 
-      // If no case associations, proceed with deletion
-      // First delete from user_lawyers table
-      await query('DELETE FROM user_lawyers WHERE lawyer_id = $1', [lawyer_id]);
+      // If checking for a specific user and no user-specific associations found,
+      // remove the user-lawyer relationship but don't delete the lawyer itself
+      if (user_id) {
+        // Check if other users are still associated with this lawyer
+        const otherUserLawyers = await query(
+          'SELECT COUNT(*) as count FROM user_lawyers WHERE lawyer_id = $1 AND user_id != $2',
+          [lawyer_id, user_id]
+        );
 
-      // Then delete the lawyer
-      const deleteResult = await query(
-        'DELETE FROM lawyers WHERE lawyer_id = $1 RETURNING lawyer_id',
-        [lawyer_id]
-      );
+        const otherUsersCount = parseInt(otherUserLawyers.rows[0].count);
+        
+        // Delete the user-lawyer relationship
+        await query('DELETE FROM user_lawyers WHERE lawyer_id = $1 AND user_id = $2', [lawyer_id, user_id]);
 
-      return {
-        success: true,
-        message: `Lawyer "${lawyer.name}" deleted successfully`,
-        deletedLawyer: lawyer
-      };
+        if (otherUsersCount > 0) {
+          // Other users still have this lawyer, so don't delete the lawyer itself
+          return {
+            success: true,
+            message: `Your association with lawyer "${lawyer.name}" has been removed successfully. The lawyer is still available to other users.`,
+            deletedLawyer: lawyer,
+            lawyerStillExists: true
+          };
+        } else {
+          // No other users have this lawyer, safe to delete the lawyer entirely
+          await query('DELETE FROM lawyers WHERE lawyer_id = $1', [lawyer_id]);
+          return {
+            success: true,
+            message: `Lawyer "${lawyer.name}" deleted successfully`,
+            deletedLawyer: lawyer,
+            lawyerStillExists: false
+          };
+        }
+      } else {
+        // Global deletion - delete from user_lawyers table first, then delete the lawyer
+        await query('DELETE FROM user_lawyers WHERE lawyer_id = $1', [lawyer_id]);
+        await query('DELETE FROM lawyers WHERE lawyer_id = $1', [lawyer_id]);
+        
+        return {
+          success: true,
+          message: `Lawyer "${lawyer.name}" deleted successfully`,
+          deletedLawyer: lawyer
+        };
+      }
     } catch (error) {
       throw error;
     }

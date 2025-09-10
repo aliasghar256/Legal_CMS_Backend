@@ -185,11 +185,12 @@ class Party {
   }
 
   /**
-   * Delete party with case association checking
+   * Delete party with case association checking (user-specific)
    * @param {number} party_id - Party ID
+   * @param {number} user_id - User ID to check associations for
    * @returns {Promise<Object>} Deletion result with details
    */
-  static async deleteWithValidation(party_id) {
+  static async deleteWithValidation(party_id, user_id = null) {
     try {
       // First check if party exists
       const party = await this.findById(party_id);
@@ -201,41 +202,86 @@ class Party {
         };
       }
 
-      // Check if party is associated with any cases
-      const caseAssociations = await query(
-        `SELECT c.case_id, c.case_number, c.case_type, c.status 
-         FROM case_lawyers cl
-         INNER JOIN cases c ON cl.case_id = c.case_id
-         WHERE cl.party_id = $1
-         ORDER BY c.case_number`,
-        [party_id]
-      );
+      let caseAssociations;
+      if (user_id) {
+        // Check if party is associated with any cases for this specific user
+        caseAssociations = await query(
+          `SELECT c.case_id, c.case_number, c.case_type, c.status 
+           FROM case_lawyers cl
+           INNER JOIN cases c ON cl.case_id = c.case_id
+           WHERE cl.party_id = $1 AND cl.user_id = $2
+           ORDER BY c.case_number`,
+          [party_id, user_id]
+        );
+      } else {
+        // Check if party is associated with any cases (global check)
+        caseAssociations = await query(
+          `SELECT c.case_id, c.case_number, c.case_type, c.status 
+           FROM case_lawyers cl
+           INNER JOIN cases c ON cl.case_id = c.case_id
+           WHERE cl.party_id = $1
+           ORDER BY c.case_number`,
+          [party_id]
+        );
+      }
 
       if (caseAssociations.rows.length > 0) {
+        const message = user_id 
+          ? `Cannot delete party "${party.name}" because it is associated with ${caseAssociations.rows.length} case(s) for your account. Please remove the party from those cases first.`
+          : `Cannot delete party "${party.name}" because it is associated with ${caseAssociations.rows.length} case(s). Please delete or update the associated cases first.`;
+        
         return {
           success: false,
-          message: `Cannot delete party "${party.name}" because it is associated with ${caseAssociations.rows.length} case(s). Please delete or update the associated cases first.`,
+          message: message,
           code: 'PARTY_HAS_CASE_ASSOCIATIONS',
           associatedCases: caseAssociations.rows,
           partyDetails: party
         };
       }
 
-      // If no case associations, proceed with deletion
-      // First delete from user_parties table
-      await query('DELETE FROM user_parties WHERE party_id = $1', [party_id]);
+      // If checking for a specific user and no user-specific associations found,
+      // remove the user-party relationship but don't delete the party itself
+      if (user_id) {
+        // Check if other users are still associated with this party
+        const otherUserParties = await query(
+          'SELECT COUNT(*) as count FROM user_parties WHERE party_id = $1 AND user_id != $2',
+          [party_id, user_id]
+        );
 
-      // Then delete the party
-      const deleteResult = await query(
-        'DELETE FROM parties WHERE party_id = $1 RETURNING party_id',
-        [party_id]
-      );
+        const otherUsersCount = parseInt(otherUserParties.rows[0].count);
+        
+        // Delete the user-party relationship
+        await query('DELETE FROM user_parties WHERE party_id = $1 AND user_id = $2', [party_id, user_id]);
 
-      return {
-        success: true,
-        message: `Party "${party.name}" deleted successfully`,
-        deletedParty: party
-      };
+        if (otherUsersCount > 0) {
+          // Other users still have this party, so don't delete the party itself
+          return {
+            success: true,
+            message: `Your association with party "${party.name}" has been removed successfully. The party is still available to other users.`,
+            deletedParty: party,
+            partyStillExists: true
+          };
+        } else {
+          // No other users have this party, safe to delete the party entirely
+          await query('DELETE FROM parties WHERE party_id = $1', [party_id]);
+          return {
+            success: true,
+            message: `Party "${party.name}" deleted successfully`,
+            deletedParty: party,
+            partyStillExists: false
+          };
+        }
+      } else {
+        // Global deletion - delete from user_parties table first, then delete the party
+        await query('DELETE FROM user_parties WHERE party_id = $1', [party_id]);
+        await query('DELETE FROM parties WHERE party_id = $1', [party_id]);
+        
+        return {
+          success: true,
+          message: `Party "${party.name}" deleted successfully`,
+          deletedParty: party
+        };
+      }
     } catch (error) {
       throw error;
     }

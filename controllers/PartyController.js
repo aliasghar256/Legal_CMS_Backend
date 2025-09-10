@@ -192,11 +192,12 @@ class PartyController {
   }
 
   /**
-   * Delete party with case association validation
+   * Delete party with case association validation (user-specific)
    */
   static async delete(req, res) {
     try {
       const { id } = req.params;
+      const user_id = req.user.user_id;
 
       if (!id || isNaN(parseInt(id))) {
         return res.status(400).json({
@@ -206,7 +207,7 @@ class PartyController {
       }
 
       const partyId = parseInt(id);
-      const deletionResult = await Party.deleteWithValidation(partyId);
+      const deletionResult = await Party.deleteWithValidation(partyId, user_id);
 
       if (!deletionResult.success) {
         // Handle specific error codes
@@ -242,7 +243,8 @@ class PartyController {
         success: true,
         message: deletionResult.message,
         data: {
-          deletedParty: deletionResult.deletedParty
+          deletedParty: deletionResult.deletedParty,
+          partyStillExists: deletionResult.partyStillExists || false
         }
       });
     } catch (error) {

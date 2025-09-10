@@ -256,10 +256,11 @@ class CaseController {
     }
   }
 
-  // Delete case
+  // Delete case (removes user's association with case, not the case itself)
   static async deleteCase(req, res) {
     try {
       const caseId = parseInt(req.params.id);
+      const user_id = req.user.user_id;
       
       if (isNaN(caseId)) {
         return res.status(400).json({
@@ -268,18 +269,19 @@ class CaseController {
         });
       }
       
-      const deleted = await Case.delete(caseId);
+      const deleted = await Case.deleteUserAssociation(caseId, user_id);
       
-      if (!deleted) {
+      if (!deleted.success) {
         return res.status(404).json({
           success: false,
-          message: 'Case not found'
+          message: deleted.message
         });
       }
       
       res.json({
         success: true,
-        message: 'Case deleted successfully'
+        message: deleted.message,
+        data: deleted.data
       });
     } catch (error) {
       console.error('Error in deleteCase:', error);
