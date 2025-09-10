@@ -344,6 +344,12 @@ class CaseController {
   // Update case parties (add or remove parties from a case)
   static async updateCaseParties(req, res) {
     try {
+      console.log('📞 updateCaseParties called with:', {
+        caseId: req.params.id,
+        body: req.body,
+        userId: req.user?.user_id
+      })
+      
       const caseId = parseInt(req.params.id);
       const { action, party_ids, lawyer_id } = req.body;
       const user_id = req.user.user_id;
@@ -406,6 +412,12 @@ class CaseController {
   // Update case lawyers (add or remove lawyers from a case)
   static async updateCaseLawyers(req, res) {
     try {
+      console.log('📞 updateCaseLawyers called with:', {
+        caseId: req.params.id,
+        body: req.body,
+        userId: req.user?.user_id
+      })
+      
       const caseId = parseInt(req.params.id);
       const { action, lawyer_ids, party_id } = req.body;
       const user_id = req.user.user_id;
