@@ -14,6 +14,9 @@ courtSearchRouter.post('/profile', CourtSearchController.getCaseProfile);
 // Refresh all tokens (XSRF, Search Token, and Session)
 courtSearchRouter.post('/refresh-tokens', CourtSearchController.refreshTokens);
 
+// Get current token status
+courtSearchRouter.get('/token-status', CourtSearchController.getTokenStatus);
+
 // Create cases from court profiles
 courtSearchRouter.post('/create-cases', authMiddleware, CourtSearchController.createCasesFromProfiles);
 

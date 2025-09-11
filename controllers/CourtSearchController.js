@@ -5,6 +5,141 @@ const Case = require('../models/Case');
 const CaseLawyer = require('../models/CaseLawyer');
 
 class CourtSearchController {
+  // Store current tokens in memory (in production, consider using Redis)
+  static currentTokens = {
+    searchToken: null,
+    xsrfToken: null,
+    sessionToken: null,
+    lastRefresh: null
+  };
+
+  // Cache valid token check to avoid frequent validations
+  static isTokenCacheValid() {
+    if (!this.currentTokens.lastRefresh) return false;
+    
+    // Consider tokens valid for 10 minutes to reduce refresh frequency
+    const tokenAge = (new Date() - new Date(this.currentTokens.lastRefresh)) / 1000 / 60;
+    return tokenAge < 10 && this.currentTokens.searchToken && this.currentTokens.xsrfToken && this.currentTokens.sessionToken;
+  }
+
+  // Helper function to perform HTTP requests with automatic token refresh on 419 errors
+  static async makeRequestWithAutoRefresh(requestConfig, formData = null, maxRetries = 2) {
+    let lastError = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`🔄 Attempt ${attempt}/${maxRetries} for request to ${requestConfig.url}`);
+        
+        // Use current tokens if available, otherwise fallback to env vars
+        const currentTokens = CourtSearchController.currentTokens;
+        if (currentTokens.xsrfToken && currentTokens.sessionToken) {
+          requestConfig.headers = requestConfig.headers || {};
+          requestConfig.headers['Cookie'] = `XSRF-TOKEN=${currentTokens.xsrfToken}; cfms_dc_session=${currentTokens.sessionToken}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`;
+        }
+        
+        // Update search token in form data if provided and tokens are available
+        if (formData && currentTokens.searchToken) {
+          formData.set('_token', currentTokens.searchToken);
+          requestConfig.data = formData.toString();
+        }
+        
+        const response = await axios(requestConfig);
+        console.log(`✅ Request successful on attempt ${attempt}`);
+        return response;
+        
+      } catch (error) {
+        lastError = error;
+        
+        // Check if this is a CSRF token mismatch error (419)
+        if (error.response && error.response.status === 419) {
+          console.log(`🔄 CSRF token mismatch detected (419) on attempt ${attempt}. Refreshing tokens...`);
+          
+          // Don't retry on the last attempt
+          if (attempt < maxRetries) {
+            try {
+              await CourtSearchController.refreshTokensInternal();
+              console.log(`✅ Tokens refreshed successfully. Retrying request...`);
+              continue; // Retry the request with new tokens
+            } catch (refreshError) {
+              console.error(`❌ Failed to refresh tokens:`, refreshError.message);
+              // Continue to next attempt or fail
+            }
+          }
+        } else {
+          // For non-419 errors, don't retry
+          const statusCode = error.response?.status;
+          const statusText = error.response?.statusText || 'Unknown error';
+          
+          if (statusCode === 522) {
+            console.log(`❌ Server timeout error (522): Court system is temporarily unavailable`);
+            throw new Error('Court system is temporarily unavailable (server timeout). Please try again later.');
+          } else if (statusCode === 503) {
+            console.log(`❌ Service unavailable (503): Court system is under maintenance`);
+            throw new Error('Court system is currently under maintenance. Please try again later.');
+          } else if (statusCode >= 500) {
+            console.log(`❌ Server error (${statusCode}): ${statusText}`);
+            throw new Error(`Court system is experiencing server issues (${statusCode}). Please try again later.`);
+          } else {
+            console.log(`❌ Non-retryable error (${statusCode || 'unknown'}):`, error.message);
+            throw error;
+          }
+        }
+      }
+    }
+    
+    // If we get here, all retries failed
+    console.error(`❌ All ${maxRetries} attempts failed. Last error:`, lastError.message);
+    throw lastError;
+  }
+
+  // Internal method to refresh tokens (without HTTP response)
+  static async refreshTokensInternal() {
+    console.log('🔄 Starting internal token refresh process...');
+
+    try {
+      // Make a GET request to the court search homepage to get fresh tokens
+      const response = await axios.get('https://cases.districtcourtssindh.gos.pk/case-search', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive',
+          'DNT': '1',
+          'Upgrade-Insecure-Requests': '1',
+          'Cache-Control': 'no-cache'
+        },
+        timeout: 20000 // Faster token refresh
+      });
+
+      console.log('📄 Received response from court search homepage');
+
+      // Extract tokens from response
+      const tokens = CourtSearchController.extractTokensFromResponse(response);
+
+      if (!tokens.searchToken || !tokens.xsrfToken || !tokens.sessionToken) {
+        throw new Error('Failed to extract all required tokens');
+      }
+
+      // Update current tokens
+      CourtSearchController.currentTokens = {
+        ...tokens,
+        lastRefresh: new Date().toISOString()
+      };
+
+      console.log('✅ Tokens refreshed successfully:', {
+        searchToken: tokens.searchToken?.substring(0, 20) + '...',
+        xsrfToken: tokens.xsrfToken?.substring(0, 20) + '...',
+        sessionToken: tokens.sessionToken?.substring(0, 20) + '...',
+        lastRefresh: CourtSearchController.currentTokens.lastRefresh
+      });
+
+      return CourtSearchController.currentTokens;
+    } catch (error) {
+      console.error('❌ Error in refreshTokensInternal:', error.message);
+      throw error;
+    }
+  }
   // Search cases in Sindh District Courts
   static async searchCases(req, res) {
     try {
@@ -21,9 +156,10 @@ class CourtSearchController {
         status = [] // Array for status filtering
       } = req.body;
 
-      // Prepare form data for the external API
+      // Prepare form data for the external API using current tokens (will be refreshed on 419 error)
+      const currentTokens = CourtSearchController.currentTokens;
       const formData = new URLSearchParams();
-      formData.append('_token', process.env.COURT_SEARCH_TOKEN); // This might need to be dynamic
+      formData.append('_token', currentTokens.searchToken || process.env.COURT_SEARCH_TOKEN);
       formData.append('district', district);
       formData.append('caseno', caseno);
       formData.append('caseyear', caseyear);
@@ -39,18 +175,25 @@ class CourtSearchController {
         status.forEach(s => formData.append('status[]', s));
       }
 
-      // Make request to Sindh District Courts API
-      const response = await axios.post('https://cases.districtcourtssindh.gos.pk/case-search', formData, {
+      // Make request with automatic retry on 419 errors
+      const requestConfig = {
+        method: 'post',
+        url: 'https://cases.districtcourtssindh.gos.pk/case-search',
+        data: formData.toString(),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           'Origin': 'https://cases.districtcourtssindh.gos.pk',
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': `XSRF-TOKEN=${process.env.COURT_SEARCH_XSRF_TOKEN}; cfms_dc_session=${process.env.COURT_SEARCH_SESSION}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`
+          'Cookie': `XSRF-TOKEN=${currentTokens.xsrfToken || process.env.COURT_SEARCH_XSRF_TOKEN}; cfms_dc_session=${currentTokens.sessionToken || process.env.COURT_SEARCH_SESSION}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`
         },
-        timeout: 30000 // 30 second timeout
-      });
+        timeout: 15000 // 15 second timeout for faster response
+      };
+
+      const response = await CourtSearchController.makeRequestWithAutoRefresh(requestConfig, formData);
+
+      console.log('✅ Court search request successful');
 
       // Parse the HTML response to extract case data
       const parsedData = CourtSearchController.parseSearchResults(response.data);
@@ -76,6 +219,33 @@ class CourtSearchController {
     } catch (error) {
       console.error('Error in searchCases:', error);
       
+      // Handle specific error messages from our auto-retry system
+      if (error.message.includes('Court system is temporarily unavailable')) {
+        return res.status(522).json({
+          success: false,
+          message: 'Court system is temporarily unavailable',
+          error: 'The external court system is experiencing timeout issues. Please try again in a few minutes.',
+          retryAfter: 300 // Suggest retry after 5 minutes
+        });
+      }
+      
+      if (error.message.includes('Court system is currently under maintenance')) {
+        return res.status(503).json({
+          success: false,
+          message: 'Court system is under maintenance',
+          error: 'The external court system is currently under maintenance. Please try again later.'
+        });
+      }
+      
+      if (error.message.includes('Court system is experiencing server issues')) {
+        return res.status(500).json({
+          success: false,
+          message: 'Court system server error',
+          error: 'The external court system is experiencing technical difficulties. Please try again later.'
+        });
+      }
+      
+      // Handle network-level errors
       if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
         return res.status(503).json({
           success: false,
@@ -100,15 +270,20 @@ class CourtSearchController {
     }
   }
 
-  // Parse HTML response to extract structured case data
+  // Parse HTML response to extract structured case data (optimized for performance)
   static parseSearchResults(htmlData) {
-    const $ = cheerio.load(htmlData);
+    const $ = cheerio.load(htmlData, {
+      xmlMode: false,
+      decodeEntities: false // Faster parsing
+    });
     
     const cases = [];
     const seenCaseCodes = new Set(); // Track duplicate case codes
     
-    // Find the table with search results
-    $('table.table-striped tbody tr').each((index, element) => {
+    // Find the table with search results - use more specific selector for speed
+    const rows = $('table.table-striped tbody tr');
+    
+    rows.each((index, element) => {
       const $row = $(element);
       const cells = $row.find('td');
       
@@ -121,6 +296,7 @@ class CourtSearchController {
           return; // Skip this iteration
         }
         
+        // Extract text more efficiently
         const caseData = {
           serialNumber: $(cells[0]).text().trim(),
           caseDetails: $(cells[1]).text().trim(),
@@ -175,23 +351,27 @@ class CourtSearchController {
         });
       }
 
-      // Prepare form data for case profile request
+      // Prepare form data for case profile request with dynamic tokens
+      const currentTokens = CourtSearchController.currentTokens;
       const formData = new URLSearchParams();
-      formData.append('_token', process.env.COURT_SEARCH_TOKEN);
+      formData.append('_token', currentTokens.searchToken || process.env.COURT_SEARCH_TOKEN);
       formData.append('casecode', caseCode);
 
-      // Make request to get case profile
-      const response = await axios.post('https://cases.districtcourtssindh.gos.pk/case-profile', formData, {
+      // Make request to get case profile with auto-retry on token errors
+      const response = await CourtSearchController.makeRequestWithAutoRefresh({
+        method: 'post',
+        url: 'https://cases.districtcourtssindh.gos.pk/case-profile',
+        data: formData.toString(),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           'Origin': 'https://cases.districtcourtssindh.gos.pk',
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': `XSRF-TOKEN=${process.env.COURT_SEARCH_XSRF_TOKEN}; cfms_dc_session=${process.env.COURT_SEARCH_SESSION}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`
+          'Cookie': `XSRF-TOKEN=${currentTokens.xsrfToken || process.env.COURT_SEARCH_XSRF_TOKEN}; cfms_dc_session=${currentTokens.sessionToken || process.env.COURT_SEARCH_SESSION}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`
         },
         timeout: 15000
-      });
+      }, formData);
 
       // Parse the case profile HTML
       const profileData = CourtSearchController.parseCaseProfile(response.data);
@@ -230,18 +410,23 @@ class CourtSearchController {
     }
   }
 
-  // Parse case profile HTML
+  // Parse case profile HTML (optimized for performance)
   static parseCaseProfile(htmlData) {
-    const $ = cheerio.load(htmlData);
+    const $ = cheerio.load(htmlData, {
+      xmlMode: false,
+      decodeEntities: false // Faster parsing
+    });
     
     const profile = {
       caseDetails: {},
       hearingHistory: []
     };
 
-    // Parse Case Details from the first table
+    // Parse Case Details from the first table - use more specific selectors
     const caseDetailTable = $('table').first();
-    caseDetailTable.find('tbody tr').each((index, row) => {
+    const detailRows = caseDetailTable.find('tbody tr');
+    
+    detailRows.each((index, row) => {
       const $row = $(row);
       const cells = $row.find('th, td');
       
@@ -271,9 +456,11 @@ class CourtSearchController {
       }
     });
 
-    // Parse Hearing History from the second table
+    // Parse Hearing History from the second table - use more specific selectors
     const hearingTable = $('table').eq(1);
-    hearingTable.find('tbody tr').each((index, row) => {
+    const hearingRows = hearingTable.find('tbody tr');
+    
+    hearingRows.each((index, row) => {
       const $row = $(row);
       const cells = $row.find('td');
       
@@ -284,7 +471,7 @@ class CourtSearchController {
           date: $(cells[2]).find('kbd').text().trim() || $(cells[2]).text().trim()
         };
         
-        // Clean up the diary text
+        // Clean up the diary text more efficiently
         hearingEntry.diary = hearingEntry.diary.replace(/\s+/g, ' ').trim();
         
         profile.hearingHistory.push(hearingEntry);
@@ -304,19 +491,24 @@ class CourtSearchController {
       }
     }
 
-    // Sort hearing history by date (most recent first)
-    profile.hearingHistory.sort((a, b) => {
-      const dateA = new Date(a.date);
-      const dateB = new Date(b.date);
-      return dateB - dateA;
-    });
+    // Sort hearing history by date (most recent first) - more efficient sorting
+    if (profile.hearingHistory.length > 1) {
+      profile.hearingHistory.sort((a, b) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        return dateB - dateA;
+      });
+    }
 
     return profile;
   }
 
-  // Get districts list
+  // Get districts list (cached for performance)
   static async getDistricts(req, res) {
     try {
+      // Set cache headers for 1 hour since districts rarely change
+      res.set('Cache-Control', 'public, max-age=3600');
+      
       const districts = [
         { value: "2", name: "Karachi (South)" },
         { value: "3", name: "Karachi(West)" },
@@ -971,23 +1163,27 @@ class CourtSearchController {
   // Helper function to get case profile data (extracted logic from getCaseProfile)
   static async getCaseProfileData(caseCode) {
     try {
-      // Prepare form data for case profile request
+      // Prepare form data for case profile request with dynamic tokens
+      const currentTokens = CourtSearchController.currentTokens;
       const formData = new URLSearchParams();
-      formData.append('_token', process.env.COURT_SEARCH_TOKEN);
+      formData.append('_token', currentTokens.searchToken || process.env.COURT_SEARCH_TOKEN);
       formData.append('casecode', caseCode);
 
-      // Make request to get case profile
-      const response = await axios.post('https://cases.districtcourtssindh.gos.pk/case-profile', formData, {
+      // Make request to get case profile with auto-retry on token errors
+      const response = await CourtSearchController.makeRequestWithAutoRefresh({
+        method: 'post',
+        url: 'https://cases.districtcourtssindh.gos.pk/case-profile',
+        data: formData.toString(),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           'Origin': 'https://cases.districtcourtssindh.gos.pk',
           'Referer': 'https://cases.districtcourtssindh.gos.pk/case-search',
           'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
           'X-Requested-With': 'XMLHttpRequest',
-          'Cookie': `XSRF-TOKEN=${process.env.COURT_SEARCH_XSRF_TOKEN}; cfms_dc_session=${process.env.COURT_SEARCH_SESSION}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`
+          'Cookie': `XSRF-TOKEN=${currentTokens.xsrfToken || process.env.COURT_SEARCH_XSRF_TOKEN}; cfms_dc_session=${currentTokens.sessionToken || process.env.COURT_SEARCH_SESSION}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`
         },
         timeout: 15000
-      });
+      }, formData);
 
       // Parse the case profile HTML and return the data
       return CourtSearchController.parseCaseProfile(response.data);
@@ -1001,42 +1197,12 @@ class CourtSearchController {
   // Refresh all tokens (XSRF, Search Token, and Session)
   static async refreshTokens(req, res) {
     try {
-      console.log('Starting token refresh process...');
+      console.log('🔄 Starting token refresh process via API endpoint...');
 
-      // Make a GET request to the court search homepage to get fresh tokens
-      const response = await axios.get('https://cases.districtcourtssindh.gos.pk/case-search', {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'DNT': '1',
-          'Upgrade-Insecure-Requests': '1',
-          'Cache-Control': 'no-cache'
-        },
-        timeout: 30000
-      });
+      // Use the internal refresh method
+      const tokens = await CourtSearchController.refreshTokensInternal();
 
-      console.log('Received response from court search homepage');
-
-      // Extract tokens from response
-      const tokens = CourtSearchController.extractTokensFromResponse(response);
-
-      if (!tokens.searchToken || !tokens.xsrfToken || !tokens.sessionToken) {
-        console.log('Token extraction result:', tokens);
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to extract all required tokens',
-          extractedTokens: {
-            searchToken: !!tokens.searchToken,
-            xsrfToken: !!tokens.xsrfToken,
-            sessionToken: !!tokens.sessionToken
-          },
-          details: tokens
-        });
-      }
-
-      // Update environment variables (runtime)
+      // Update environment variables (runtime) for backward compatibility
       process.env.COURT_SEARCH_TOKEN = tokens.searchToken;
       process.env.COURT_SEARCH_XSRF_TOKEN = tokens.xsrfToken;
       process.env.COURT_SEARCH_SESSION = tokens.sessionToken;
@@ -1044,7 +1210,7 @@ class CourtSearchController {
       // Update .env file
       const envUpdateResult = await CourtSearchController.updateEnvFile(tokens);
 
-      console.log('Tokens successfully refreshed and updated in environment and .env file');
+      console.log('✅ Tokens successfully refreshed and updated in environment and .env file');
 
       res.json({
         success: true,
@@ -1056,11 +1222,12 @@ class CourtSearchController {
         },
         envFileUpdated: envUpdateResult.success,
         envUpdateMessage: envUpdateResult.message,
-        timestamp: new Date().toISOString()
+        timestamp: tokens.lastRefresh,
+        autoRetryEnabled: true
       });
 
     } catch (error) {
-      console.error('Error in refreshTokens:', error);
+      console.error('❌ Error in refreshTokens:', error);
       
       if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
         return res.status(503).json({
@@ -1190,9 +1357,12 @@ class CourtSearchController {
     return tokens;
   }
 
-  // Get court types
+  // Get court types (cached for performance)
   static async getCourtTypes(req, res) {
     try {
+      // Set cache headers for 1 hour since court types rarely change
+      res.set('Cache-Control', 'public, max-age=3600');
+      
       const courtTypes = [
         { value: "0", name: "NIL-Default Court Type" },
         { value: "1", name: "District Courts" },
@@ -1229,6 +1399,40 @@ class CourtSearchController {
       res.status(500).json({
         success: false,
         message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+
+  // Get current token status
+  static async getTokenStatus(req, res) {
+    try {
+      const hasTokens = !!(CourtSearchController.currentTokens.searchToken && CourtSearchController.currentTokens.xsrfToken && CourtSearchController.currentTokens.sessionToken);
+      const tokenAge = CourtSearchController.currentTokens.lastRefresh ? 
+        Math.floor((new Date() - new Date(CourtSearchController.currentTokens.lastRefresh)) / 1000 / 60) : null;
+
+      res.json({
+        success: true,
+        status: {
+          hasValidTokens: hasTokens,
+          lastRefresh: CourtSearchController.currentTokens.lastRefresh,
+          tokenAgeMinutes: tokenAge,
+          autoRetryEnabled: true,
+          tokens: {
+            searchToken: CourtSearchController.currentTokens.searchToken ? 
+              CourtSearchController.currentTokens.searchToken.substring(0, 20) + '...' : null,
+            xsrfToken: CourtSearchController.currentTokens.xsrfToken ? 
+              CourtSearchController.currentTokens.xsrfToken.substring(0, 20) + '...' : null,
+            sessionToken: CourtSearchController.currentTokens.sessionToken ? 
+              CourtSearchController.currentTokens.sessionToken.substring(0, 20) + '...' : null
+          }
+        }
+      });
+    } catch (error) {
+      console.error('❌ Error getting token status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get token status',
         error: error.message
       });
     }
