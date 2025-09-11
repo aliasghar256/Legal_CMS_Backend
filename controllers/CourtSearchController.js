@@ -14,132 +14,72 @@ class CourtSearchController {
   };
 
   // Cache valid token check to avoid frequent validations
-  static isTokenCacheValid() {
-    if (!this.currentTokens.lastRefresh) return false;
-    
-    // Consider tokens valid for 10 minutes to reduce refresh frequency
-    const tokenAge = (new Date() - new Date(this.currentTokens.lastRefresh)) / 1000 / 60;
-    return tokenAge < 10 && this.currentTokens.searchToken && this.currentTokens.xsrfToken && this.currentTokens.sessionToken;
-  }
-
-  // Helper function to perform HTTP requests with automatic token refresh on 419 errors
-  static async makeRequestWithAutoRefresh(requestConfig, formData = null, maxRetries = 2) {
-    let lastError = null;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`🔄 Attempt ${attempt}/${maxRetries} for request to ${requestConfig.url}`);
+  // Simple method that only refreshes tokens on CSRF errors (419)
+  static async makeRequestWithAutoRefresh(requestConfig, formData = null) {
+    try {
+      // Use current tokens if available
+      const currentTokens = CourtSearchController.currentTokens;
+      if (currentTokens.xsrfToken && currentTokens.sessionToken) {
+        requestConfig.headers = requestConfig.headers || {};
+        requestConfig.headers['Cookie'] = `XSRF-TOKEN=${currentTokens.xsrfToken}; cfms_dc_session=${currentTokens.sessionToken}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`;
+      }
+      
+      // Update search token in form data if provided
+      if (formData && currentTokens.searchToken) {
+        formData.set('_token', currentTokens.searchToken);
+        requestConfig.data = formData.toString();
+      }
+      
+      const response = await axios(requestConfig);
+      return response;
+      
+    } catch (error) {
+      // Only retry on CSRF token mismatch (419)
+      if (error.response?.status === 419) {
+        console.log('🔄 CSRF token mismatch (419), refreshing tokens and retrying...');
         
-        // Use current tokens if available, otherwise fallback to env vars
-        const currentTokens = CourtSearchController.currentTokens;
-        if (currentTokens.xsrfToken && currentTokens.sessionToken) {
-          requestConfig.headers = requestConfig.headers || {};
-          requestConfig.headers['Cookie'] = `XSRF-TOKEN=${currentTokens.xsrfToken}; cfms_dc_session=${currentTokens.sessionToken}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`;
-        }
+        // Refresh tokens and retry once
+        await CourtSearchController.refreshTokensInternal();
         
-        // Update search token in form data if provided and tokens are available
-        if (formData && currentTokens.searchToken) {
-          formData.set('_token', currentTokens.searchToken);
+        // Update request with new tokens
+        const newTokens = CourtSearchController.currentTokens;
+        requestConfig.headers['Cookie'] = `XSRF-TOKEN=${newTokens.xsrfToken}; cfms_dc_session=${newTokens.sessionToken}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`;
+        
+        if (formData && newTokens.searchToken) {
+          formData.set('_token', newTokens.searchToken);
           requestConfig.data = formData.toString();
         }
         
-        const response = await axios(requestConfig);
-        console.log(`✅ Request successful on attempt ${attempt}`);
-        return response;
-        
-      } catch (error) {
-        lastError = error;
-        
-        // Check if this is a CSRF token mismatch error (419)
-        if (error.response && error.response.status === 419) {
-          console.log(`🔄 CSRF token mismatch detected (419) on attempt ${attempt}. Refreshing tokens...`);
-          
-          // Don't retry on the last attempt
-          if (attempt < maxRetries) {
-            try {
-              await CourtSearchController.refreshTokensInternal();
-              console.log(`✅ Tokens refreshed successfully. Retrying request...`);
-              continue; // Retry the request with new tokens
-            } catch (refreshError) {
-              console.error(`❌ Failed to refresh tokens:`, refreshError.message);
-              // Continue to next attempt or fail
-            }
-          }
-        } else {
-          // For non-419 errors, don't retry
-          const statusCode = error.response?.status;
-          const statusText = error.response?.statusText || 'Unknown error';
-          
-          if (statusCode === 522) {
-            console.log(`❌ Server timeout error (522): Court system is temporarily unavailable`);
-            throw new Error('Court system is temporarily unavailable (server timeout). Please try again later.');
-          } else if (statusCode === 503) {
-            console.log(`❌ Service unavailable (503): Court system is under maintenance`);
-            throw new Error('Court system is currently under maintenance. Please try again later.');
-          } else if (statusCode >= 500) {
-            console.log(`❌ Server error (${statusCode}): ${statusText}`);
-            throw new Error(`Court system is experiencing server issues (${statusCode}). Please try again later.`);
-          } else {
-            console.log(`❌ Non-retryable error (${statusCode || 'unknown'}):`, error.message);
-            throw error;
-          }
-        }
+        // Single retry with fresh tokens
+        return await axios(requestConfig);
       }
-    }
-    
-    // If we get here, all retries failed
-    console.error(`❌ All ${maxRetries} attempts failed. Last error:`, lastError.message);
-    throw lastError;
-  }
-
-  // Internal method to refresh tokens (without HTTP response)
-  static async refreshTokensInternal() {
-    console.log('🔄 Starting internal token refresh process...');
-
-    try {
-      // Make a GET request to the court search homepage to get fresh tokens
-      const response = await axios.get('https://cases.districtcourtssindh.gos.pk/case-search', {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Connection': 'keep-alive',
-          'DNT': '1',
-          'Upgrade-Insecure-Requests': '1',
-          'Cache-Control': 'no-cache'
-        },
-        timeout: 20000 // Faster token refresh
-      });
-
-      console.log('📄 Received response from court search homepage');
-
-      // Extract tokens from response
-      const tokens = CourtSearchController.extractTokensFromResponse(response);
-
-      if (!tokens.searchToken || !tokens.xsrfToken || !tokens.sessionToken) {
-        throw new Error('Failed to extract all required tokens');
-      }
-
-      // Update current tokens
-      CourtSearchController.currentTokens = {
-        ...tokens,
-        lastRefresh: new Date().toISOString()
-      };
-
-      console.log('✅ Tokens refreshed successfully:', {
-        searchToken: tokens.searchToken?.substring(0, 20) + '...',
-        xsrfToken: tokens.xsrfToken?.substring(0, 20) + '...',
-        sessionToken: tokens.sessionToken?.substring(0, 20) + '...',
-        lastRefresh: CourtSearchController.currentTokens.lastRefresh
-      });
-
-      return CourtSearchController.currentTokens;
-    } catch (error) {
-      console.error('❌ Error in refreshTokensInternal:', error.message);
+      
+      // For all other errors, throw immediately
       throw error;
     }
   }
+
+  // Fast internal token refresh
+  static async refreshTokensInternal() {
+    const response = await axios.get('https://cases.districtcourtssindh.gos.pk/case-search', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      },
+      timeout: 8000
+    });
+
+    const tokens = CourtSearchController.extractTokensFromResponse(response);
+    
+    if (!tokens.searchToken || !tokens.xsrfToken || !tokens.sessionToken) {
+      throw new Error('Failed to extract required tokens');
+    }
+
+    // Update in-memory tokens (faster than .env file I/O)
+    CourtSearchController.currentTokens = tokens;
+    console.log('✅ Tokens refreshed in memory');
+  }
+
   // Search cases in Sindh District Courts
   static async searchCases(req, res) {
     try {
