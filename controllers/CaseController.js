@@ -43,6 +43,209 @@ class CaseController {
       });
     }
   }
+
+  // Search user cases with comprehensive text search
+  static async searchUserCases(req, res) {
+    try {
+      const { 
+        query: searchQuery = '', 
+        page = 1, 
+        limit = 20, 
+        status, 
+        case_type, 
+        court_id 
+      } = req.query;
+      
+      // Validate page and limit
+      const pageNum = Math.max(1, parseInt(page));
+      const limitNum = Math.min(Math.max(1, parseInt(limit)), 100); // Max 100 per page
+      const offset = (pageNum - 1) * limitNum;
+      
+      const user_id = req.user.user_id;
+      
+      console.log(`Searching user cases - Query: "${searchQuery}", Page: ${pageNum}, Limit: ${limitNum}`);
+      
+      if (!searchQuery || searchQuery.trim() === '') {
+        // If no search query, return regular user cases
+        const casesResult = await CaseLawyer.getCasesByUserId(
+          user_id,
+          limitNum, 
+          offset, 
+          status, 
+          case_type, 
+          court_id ? parseInt(court_id) : null
+        );
+        
+        return res.json({
+          success: true,
+          data: casesResult
+        });
+      }
+
+      // Perform comprehensive search using raw SQL for better performance
+      const { query } = require('../lib/db');
+      
+      // Build the search conditions
+      const searchTerm = `%${searchQuery.toLowerCase()}%`;
+      let whereConditions = [
+        'cl.user_id = $1'
+      ];
+      let queryParams = [user_id];
+      let paramIndex = 2;
+
+      // Add search conditions
+      whereConditions.push(`(
+        LOWER(c.case_number) LIKE $${paramIndex} OR
+        LOWER(c.court_name) LIKE $${paramIndex} OR
+        LOWER(c.case_type) LIKE $${paramIndex} OR
+        LOWER(c.legal_section) LIKE $${paramIndex} OR
+        LOWER(c.status) LIKE $${paramIndex} OR
+        LOWER(c.stage) LIKE $${paramIndex} OR
+        LOWER(c.description) LIKE $${paramIndex} OR
+        LOWER(l.name) LIKE $${paramIndex} OR
+        LOWER(l.license_no) LIKE $${paramIndex} OR
+        LOWER(p.name) LIKE $${paramIndex} OR
+        LOWER(p.cnic) LIKE $${paramIndex} OR
+        LOWER(p.role) LIKE $${paramIndex}
+      )`);
+      queryParams.push(searchTerm);
+      paramIndex++;
+
+      // Add optional filters
+      if (status) {
+        whereConditions.push(`LOWER(c.status) = $${paramIndex}`);
+        queryParams.push(status.toLowerCase());
+        paramIndex++;
+      }
+
+      if (case_type) {
+        whereConditions.push(`LOWER(c.case_type) = $${paramIndex}`);
+        queryParams.push(case_type.toLowerCase());
+        paramIndex++;
+      }
+
+      if (court_id) {
+        whereConditions.push(`c.court_id = $${paramIndex}`);
+        queryParams.push(parseInt(court_id));
+        paramIndex++;
+      }
+
+      // Count total results for pagination
+      const countQuery = `
+        SELECT COUNT(DISTINCT c.case_id) as total
+        FROM cases c
+        INNER JOIN case_lawyers cl ON c.case_id = cl.case_id
+        LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+        LEFT JOIN parties p ON cl.party_id = p.party_id
+        WHERE ${whereConditions.join(' AND ')}
+      `;
+
+      const countResult = await query(countQuery, queryParams);
+      const totalCases = parseInt(countResult.rows[0]?.total || 0);
+
+      // Get paginated search results
+      const searchQuerySQL = `
+        SELECT 
+          c.case_id,
+          c.case_number,
+          c.court_name,
+          c.court_id,
+          c.case_type,
+          c.legal_section,
+          c.filing_date,
+          c.status,
+          c.stage,
+          c.description,
+          c.next_hearing,
+          c.cfms_case_code,
+          
+          -- Aggregate lawyers for this case
+          COALESCE(
+            (SELECT JSON_AGG(
+              DISTINCT JSONB_BUILD_OBJECT(
+                'lawyer_id', l2.lawyer_id,
+                'name', l2.name,
+                'license_no', l2.license_no,
+                'email', l2.email,
+                'phone_number', l2.phone_number
+              )
+            ) 
+            FROM case_lawyers cl2 
+            INNER JOIN lawyers l2 ON cl2.lawyer_id = l2.lawyer_id 
+            WHERE cl2.case_id = c.case_id AND cl2.user_id = $1), 
+            '[]'
+          ) as lawyers,
+          
+          -- Aggregate parties for this case
+          COALESCE(
+            (SELECT JSON_AGG(
+              DISTINCT JSONB_BUILD_OBJECT(
+                'party_id', p2.party_id,
+                'name', p2.name,
+                'cnic', p2.cnic,
+                'role', p2.role,
+                'email', p2.email,
+                'phone_number', p2.phone_number
+              )
+            ) 
+            FROM case_lawyers cl3 
+            INNER JOIN parties p2 ON cl3.party_id = p2.party_id 
+            WHERE cl3.case_id = c.case_id AND cl3.user_id = $1), 
+            '[]'
+          ) as parties
+          
+        FROM (
+          SELECT DISTINCT c.case_id
+          FROM cases c
+          INNER JOIN case_lawyers cl ON c.case_id = cl.case_id
+          LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+          LEFT JOIN parties p ON cl.party_id = p.party_id
+          WHERE ${whereConditions.join(' AND ')}
+          ORDER BY c.case_id DESC
+          LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+        ) AS case_ids
+        INNER JOIN cases c ON case_ids.case_id = c.case_id
+        ORDER BY c.case_id DESC
+      `;
+
+      queryParams.push(limitNum, offset);
+
+      const searchResult = await query(searchQuerySQL, queryParams);
+      const cases = searchResult.rows;
+
+      // Calculate pagination
+      const totalPages = Math.ceil(totalCases / limitNum);
+      const hasMore = pageNum < totalPages;
+      const hasPrevious = pageNum > 1;
+
+      const pagination = {
+        page: pageNum,
+        limit: limitNum,
+        offset: offset,
+        total: totalCases,
+        totalPages: totalPages,
+        hasMore: hasMore,
+        hasPrevious: hasPrevious
+      };
+
+      res.json({
+        success: true,
+        data: {
+          cases: cases,
+          pagination: pagination
+        }
+      });
+
+    } catch (error) {
+      console.error('Error in searchUserCases:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+
   // Get all cases
   static async getAllCases(req, res) {
     try {

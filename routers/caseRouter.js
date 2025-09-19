@@ -7,6 +7,9 @@ const router = express.Router();
 // Get all cases for authenticated user (requires authentication)
 router.get('/my-cases', authMiddleware, CaseController.getUserCases);
 
+// Search user cases with comprehensive text search
+router.get('/search', authMiddleware, CaseController.searchUserCases);
+
 // Get pending case IDs for authenticated user
 router.get('/pending-ids', authMiddleware, CaseController.getUserPendingCaseIds);
 
