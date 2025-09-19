@@ -7,6 +7,12 @@ const router = express.Router();
 // Get all cases for authenticated user (requires authentication)
 router.get('/my-cases', authMiddleware, CaseController.getUserCases);
 
+// Get pending case IDs for authenticated user
+router.get('/pending-ids', authMiddleware, CaseController.getUserPendingCaseIds);
+
+// Update hearings for all pending cases of authenticated user
+router.put('/pending/update-hearings', authMiddleware, CaseController.updatePendingCasesHearings);
+
 // Get all cases
 router.get('/', CaseController.getAllCases);
 

@@ -49,7 +49,7 @@ class CourtSearchController {
           'X-Requested-With': 'XMLHttpRequest',
           ...options.headers
         },
-        timeout: options.timeout || 30000
+        timeout: options.timeout || 15000
       };
 
       // Add authentication cookies if tokens are available
@@ -77,25 +77,6 @@ class CourtSearchController {
       return response;
       
     } catch (error) {
-      // Handle timeout errors with retry logic
-      if (error.code === 'ECONNABORTED' && !options.isRetry) {
-        console.log('⏰ Request timed out, retrying with increased timeout...');
-        
-        // Retry once with increased timeout
-        const retryOptions = {
-          ...options,
-          timeout: 45000, // 45 seconds for retry
-          isRetry: true
-        };
-        
-        try {
-          return await CourtSearchController.makeCourtSearchRequest(url, retryOptions);
-        } catch (retryError) {
-          console.log('❌ Retry also failed, giving up');
-          throw retryError;
-        }
-      }
-      
       // Only retry on CSRF token mismatch (419)
       if (error.response?.status === 419) {
         console.log('🔄 CSRF token mismatch (419), refreshing tokens and retrying...');
@@ -116,7 +97,7 @@ class CourtSearchController {
             'Cookie': `XSRF-TOKEN=${newTokens.xsrfToken}; cfms_dc_session=${newTokens.sessionToken}; _ga_BZC4TCD7C0=GS2.1.s1754219510$o2$g1$t1754219532$j38$l0$h0`,
             ...options.headers
           },
-          timeout: options.timeout || 30000
+          timeout: options.timeout || 15000
         };
 
         // Re-inject fresh token for form data
@@ -248,10 +229,8 @@ class CourtSearchController {
       if (error.code === 'ECONNABORTED') {
         return res.status(504).json({
           success: false,
-          message: 'Court system response timeout',
-          error: 'The court system is taking longer than usual to respond. This is likely due to high traffic or slow servers on their end. Please try again in a few minutes.',
-          suggestion: 'Consider trying your search again in 2-3 minutes when the court system may be less busy.',
-          retryAfter: 180 // Suggest retry after 3 minutes
+          message: 'Search request timed out',
+          error: 'Request timeout'
         });
       }
 
@@ -405,14 +384,6 @@ class CourtSearchController {
       decodeEntities: false // Faster parsing
     });
     
-    // DEBUG: Log all tables found
-    console.log(`DEBUG: Found ${$('table').length} tables in HTML`);
-    $('table').each((index, table) => {
-      const $table = $(table);
-      const tableText = $table.text().substring(0, 200).replace(/\s+/g, ' ').trim();
-      console.log(`DEBUG: Table ${index + 1}: "${tableText}..."`);
-    });
-    
     const profile = {
       caseDetails: {},
       hearingHistory: []
@@ -452,112 +423,27 @@ class CourtSearchController {
       }
     });
 
-    // Parse Hearing History - specifically look for S.No, Diary, Date structure
-    console.log(`DEBUG: Looking for hearing tables with S.No/Diary/Date structure...`);
+    // Parse Hearing History from the second table - use more specific selectors
+    const hearingTable = $('table').eq(1);
+    const hearingRows = hearingTable.find('tbody tr');
     
-    // Look for tables that contain hearing data
-    let hearingEntries = [];
-    
-    $('table').each((tableIndex, table) => {
-      const $table = $(table);
+    hearingRows.each((index, row) => {
+      const $row = $(row);
+      const cells = $row.find('td');
       
-      // Check if this table has the hearing structure (S.No, Diary, Date)
-      const firstRow = $table.find('tr').first();
-      const headers = firstRow.find('th, td').map((i, el) => $(el).text().trim().toLowerCase()).get();
-      console.log(`DEBUG: Table ${tableIndex + 1} first row:`, headers);
-      
-      // Look for S.No/Serial, Diary, Date pattern or check if table contains date patterns
-      const hasSerialCol = headers.some(h => h.includes('s.no') || h.includes('serial') || h.includes('sr'));
-      const hasDiaryCol = headers.some(h => h.includes('diary'));
-      const hasDateCol = headers.some(h => h.includes('date'));
-      
-      console.log(`DEBUG: Table ${tableIndex + 1} analysis - Serial: ${hasSerialCol}, Diary: ${hasDiaryCol}, Date: ${hasDateCol}`);
-      
-      // Check if table contains date patterns even if headers don't match
-      const tableText = $table.text();
-      const hasDatePattern = /\d{1,2}\/\w{3}\/\d{4}/.test(tableText);
-      console.log(`DEBUG: Table ${tableIndex + 1} has date pattern: ${hasDatePattern}`);
-      
-      if ((hasSerialCol && hasDiaryCol && hasDateCol) || hasDatePattern) {
-        console.log(`DEBUG: Processing table ${tableIndex + 1} as hearing table`);
+      if (cells.length >= 3) {
+        const hearingEntry = {
+          serialNumber: $(cells[0]).text().trim(),
+          diary: $(cells[1]).text().trim(),
+          date: $(cells[2]).find('kbd').text().trim() || $(cells[2]).text().trim()
+        };
         
-        // Process all rows in this table
-        $table.find('tr').each((rowIndex, row) => {
-          const $row = $(row);
-          const cells = $row.find('td');
-          
-          // Skip header rows or rows with insufficient cells
-          if (cells.length < 3) {
-            return;
-          }
-          
-          // Extract data from cells
-          const serialNumber = $(cells[0]).text().trim();
-          const diary = $(cells[1]).text().trim();
-          const dateCell = $(cells[2]).text().trim();
-          
-          // Look for date pattern in any cell if not found in expected position
-          let rawDate = dateCell;
-          if (!rawDate.match(/\d{1,2}[\/\-]\w{3}[\/\-]\d{4}/)) {
-            for (let i = 0; i < cells.length; i++) {
-              const cellText = $(cells[i]).text().trim();
-              if (cellText.match(/\d{1,2}[\/\-]\w{3}[\/\-]\d{4}/)) {
-                rawDate = cellText;
-                break;
-              }
-            }
-          }
-          
-          console.log(`DEBUG: Row ${rowIndex + 1} - Serial: "${serialNumber}", Diary: "${diary.substring(0, 30)}...", Date: "${rawDate}"`);
-          
-          // Only process rows that look like data (not headers)
-          if (serialNumber && (diary.length > 5 || rawDate.match(/\d{1,2}[\/\-]\w{3}[\/\-]\d{4}/))) {
-            // Parse the date
-            let normalizedDate = null;
-            if (rawDate) {
-              const dateFormats = [
-                /(\d{1,2})\/(\w{3})\/(\d{4})/,  // 27/Sep/2025
-                /(\d{1,2})-(\w{3})-(\d{4})/,   // 27-Sep-2025
-              ];
-              
-              for (const format of dateFormats) {
-                const match = rawDate.match(format);
-                if (match) {
-                  const day = match[1].padStart(2, '0');
-                  const monthAbbr = match[2];
-                  const year = match[3];
-                  
-                  const monthMap = {
-                    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
-                    'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
-                    'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-                  };
-                  
-                  if (monthMap[monthAbbr]) {
-                    normalizedDate = `${year}-${monthMap[monthAbbr]}-${day}`;
-                  }
-                  break;
-                }
-              }
-            }
-            
-            const hearingEntry = {
-              serialNumber: serialNumber,
-              diary: diary.replace(/\s+/g, ' ').trim(),
-              date: normalizedDate || rawDate,
-              originalDate: rawDate
-            };
-            
-            if (normalizedDate || diary.length > 10) {
-              hearingEntries.push(hearingEntry);
-              console.log(`✅ Added hearing: ${rawDate} -> ${normalizedDate} | Diary: "${hearingEntry.diary.substring(0, 50)}..."`);
-            }
-          }
-        });
+        // Clean up the diary text more efficiently
+        hearingEntry.diary = hearingEntry.diary.replace(/\s+/g, ' ').trim();
+        
+        profile.hearingHistory.push(hearingEntry);
       }
     });
-    
-    profile.hearingHistory = hearingEntries;
 
     // Extract specific case information
     if (profile.caseDetails['Case No']) {
@@ -635,233 +521,7 @@ class CourtSearchController {
     }
   }
 
-  // Update case hearings from court profiles
-  static async updateCaseHearings(req, res) {
-    try {
-      const { caseIds } = req.body;
-      const userId = req.user ? req.user.user_id : null;
-      
-      if (!caseIds || !Array.isArray(caseIds) || caseIds.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Case IDs array is required and must not be empty'
-        });
-      }
-
-      // Call the core logic function
-      const results = await CourtSearchController.updateCaseHearingsCore(caseIds, userId);
-
-      res.json({
-        success: true,
-        message: `Processed ${results.summary.total} cases. Updated: ${results.summary.updated}, Failed: ${results.summary.failed}`,
-        results: results
-      });
-
-    } catch (error) {
-      console.error('Error in updateCaseHearings:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error',
-      });
-    }
-  }
-
-  // Core logic for updating case hearings (without HTTP request/response handling)
-  static async updateCaseHearingsCore(caseIds, userId) {
-    const Case = require('../models/Case');
-    const Hearing = require('../models/Hearing');
-    const { query } = require('../lib/db');
-    
-    const results = {
-      successful: [],
-      failed: [],
-      summary: {
-        total: caseIds.length,
-        updated: 0,
-        failed: 0
-      }
-    };
-
-    // Process each case ID
-    for (let i = 0; i < caseIds.length; i++) {
-      const caseId = caseIds[i];
-      try {
-        // Get case details from database
-        const caseResult = await query(
-          'SELECT * FROM cases WHERE case_id = $1',
-          [caseId]
-        );
-        
-        if (caseResult.rows.length === 0) {
-          results.failed.push({
-            index: i,
-            caseId: caseId,
-            error: 'Case not found in database'
-          });
-          results.summary.failed++;
-          continue;
-        }
-        
-        const caseData = caseResult.rows[0];
-        
-        // Check if user has access to this case
-        const userAccess = await query(
-          'SELECT * FROM case_lawyers WHERE case_id = $1 AND user_id = $2',
-          [caseId, userId]
-        );
-        
-        if (userAccess.rows.length === 0) {
-          results.failed.push({
-            index: i,
-            caseId: caseId,
-            error: 'Access denied: Case not associated with your account'
-          });
-          results.summary.failed++;
-          continue;
-        }
-
-        // Get case profile from court system using CFMS case code
-        if (!caseData.cfms_case_code) {
-          results.failed.push({
-            index: i,
-            caseId: caseId,
-            error: 'Case does not have CFMS case code'
-          });
-          results.summary.failed++;
-          continue;
-        }
-
-        const profileData = await CourtSearchController.getCaseProfileData(caseData.cfms_case_code);
-        if (!profileData || !profileData.hearingHistory) {
-          results.failed.push({
-            index: i,
-            caseId: caseId,
-            error: 'Failed to retrieve case profile from court system'
-          });
-          results.summary.failed++;
-          continue;
-        }
-
-        // Get existing hearings from database, ordered by date
-        const existingHearingsResult = await query(
-          'SELECT * FROM hearings WHERE case_id = $1 ORDER BY date ASC',
-          [caseId]
-        );
-        const existingHearings = existingHearingsResult.rows;
-
-        // Remove duplicates from profile hearings before processing
-        const profileHearings = CourtSearchController.removeDuplicateHearings(profileData.hearingHistory);
-        
-        // For cases where we have incorrect data in DB, clear existing hearings and re-add from profile
-        // This ensures we have the correct dates and content
-        if (profileHearings.length > 0) {
-          console.log(`Clearing existing hearings for case ${caseId} to avoid date conflicts...`);
-          try {
-            await query('DELETE FROM hearings WHERE case_id = $1', [caseId]);
-            console.log(`Cleared existing hearings for case ${caseId}`);
-          } catch (error) {
-            console.error(`Error clearing hearings for case ${caseId}:`, error);
-          }
-        }
-        
-        let updatedHearings = 0;
-        let addedHearings = 0;
-        let caseStatusUpdated = false;
-        let nextHearingUpdated = false;
-
-        // Add all hearings from profile (since we cleared existing ones)
-        for (const profileHearing of profileHearings) {
-          if (!profileHearing.date) continue;
-
-          const hearingDate = profileHearing.date; // Already normalized
-          const profileDiary = (profileHearing.diary || '').trim();
-
-          try {
-            const newHearing = await Hearing.create({
-              case_id: caseId,
-              judge_id: null,
-              date: hearingDate,
-              description: profileDiary,
-              type: 'Regular'
-            });
-            addedHearings++;
-            console.log(`Added hearing for case ${caseId} on ${hearingDate} with: ${profileDiary || 'BLANK'}`);
-          } catch (error) {
-            console.error(`Error creating hearing for case ${caseId} on ${hearingDate}:`, error);
-          }
-        }
-
-        // Determine case status and next hearing date based on latest hearing in profile
-        if (profileHearings.length > 0) {
-          // Sort profile hearings by date to find the latest one
-          const sortedProfileHearings = profileHearings
-            .filter(h => h.date && !isNaN(new Date(h.date).getTime()))
-            .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-          if (sortedProfileHearings.length > 0) {
-            const latestProfileHearing = sortedProfileHearings[0];
-            const latestProfileDiary = (latestProfileHearing.diary || '').trim();
-
-            if (latestProfileDiary) {
-              // Latest hearing is not blank - case is disposed
-              try {
-                await query(
-                  'UPDATE cases SET status = $1, next_hearing = NULL WHERE case_id = $2',
-                  ['Disposed', caseId]
-                );
-                caseStatusUpdated = true;
-                console.log(`Updated case ${caseId} status to Disposed`);
-              } catch (error) {
-                console.error(`Error updating case status for case ${caseId}:`, error);
-              }
-            } else {
-              // Latest hearing is blank - set next hearing date
-              const latestDate = new Date(latestProfileHearing.date).toISOString().split('T')[0];
-              try {
-                await query(
-                  'UPDATE cases SET next_hearing = $1 WHERE case_id = $2',
-                  [latestDate, caseId]
-                );
-                nextHearingUpdated = true;
-                console.log(`Updated next hearing date for case ${caseId} to ${latestDate}`);
-              } catch (error) {
-                console.error(`Error updating next hearing date for case ${caseId}:`, error);
-              }
-            }
-          }
-        }
-
-        results.successful.push({
-          index: i,
-          caseId: caseId,
-          caseNumber: caseData.case_number,
-          cfmsCaseCode: caseData.cfms_case_code,
-          updatedHearings: updatedHearings,
-          addedHearings: addedHearings,
-          caseStatusUpdated: caseStatusUpdated,
-          nextHearingUpdated: nextHearingUpdated,
-          totalProfileHearings: profileData.hearingHistory ? profileData.hearingHistory.length : 0,
-          uniqueProfileHearings: profileHearings.length,
-          duplicatesRemoved: (profileData.hearingHistory ? profileData.hearingHistory.length : 0) - profileHearings.length,
-          message: `Updated ${updatedHearings} hearings, added ${addedHearings} new hearings`
-        });
-        results.summary.updated++;
-
-      } catch (error) {
-        console.error(`Error processing case ${caseId}:`, error);
-        results.failed.push({
-          index: i,
-          caseId: caseId,
-          error: error.message
-        });
-        results.summary.failed++;
-      }
-    }
-
-    return results;
-  }
-
-  // Create cases from court profiles with enhanced date parsing
+  // Create cases from profiles
   static async createCasesFromProfiles(req, res) {
     try {
       const { cases } = req.body;
@@ -935,20 +595,9 @@ class CourtSearchController {
               caseObj.hearingDate.trim() !== '' && 
               caseObj.hearingDate.toUpperCase() !== 'NOT FOUND' &&
               caseObj.hearingDate.toUpperCase() !== 'N/A') {
-            // Use the enhanced date parsing function for consistency
-            nextHearingDate = CourtSearchController.parseCourtDate(caseObj.hearingDate);
-            console.log(`DEBUG: Parsed hearing date "${caseObj.hearingDate}" -> "${nextHearingDate}"`);
-          }
-
-          // If no hearing date from request, try to get latest blank hearing from profile
-          if (!nextHearingDate && hearingHistory && hearingHistory.length > 0) {
-            const latestBlankHearing = hearingHistory
-              .filter(h => h.date && (!h.diary || h.diary.trim() === ''))
-              .sort((a, b) => new Date(b.date) - new Date(a.date))[0];
-            
-            if (latestBlankHearing) {
-              nextHearingDate = latestBlankHearing.date;
-              console.log(`DEBUG: Using latest blank hearing as next hearing: "${nextHearingDate}"`);
+            const parsedDate = new Date(caseObj.hearingDate);
+            if (!isNaN(parsedDate.getTime())) {
+              nextHearingDate = parsedDate.toISOString().split('T')[0];
             }
           }
 
@@ -980,20 +629,90 @@ class CourtSearchController {
             );
             
             if (userCaseConnection.rows.length > 0) {
-              // User is already connected to this case
-              results.failed.push({
-                index: i,
-                caseCode: caseObj.caseCode,
-                error: 'Case already exists and is connected to your account',
-                existingCaseId: existingCase.case_id
+              // User is already connected to this case - check for new hearings
+              console.log(`DEBUG: Case already connected to user. Checking for new hearings...`);
+              
+              // Get existing hearings for this case
+              const existingHearings = await query(
+                'SELECT date, description FROM hearings WHERE case_id = $1',
+                [existingCase.case_id]
+              );
+              
+              // Create a Set of existing hearing signatures for quick lookup
+              const existingHearingSignatures = new Set();
+              existingHearings.rows.forEach(hearing => {
+                const signature = `${hearing.date}_${(hearing.description || '').trim()}`;
+                existingHearingSignatures.add(signature);
               });
-              results.summary.failed++;
+              
+              // Compare with hearings from court search and create new ones
+              const hearingHistory = profileData.hearingHistory || [];
+              const newHearings = [];
+              
+              for (const hearingEntry of hearingHistory) {
+                if (hearingEntry.date) {
+                  let hearingDate = null;
+                  const parsedDate = new Date(hearingEntry.date);
+                  if (!isNaN(parsedDate.getTime())) {
+                    hearingDate = parsedDate.toISOString().split('T')[0];
+                    
+                    // Create signature for this hearing
+                    const hearingSignature = `${hearingDate}_${(hearingEntry.diary || '').trim()}`;
+                    
+                    // Check if this hearing already exists
+                    if (!existingHearingSignatures.has(hearingSignature)) {
+                      try {
+                        const hearing = await Hearing.create({
+                          case_id: existingCase.case_id,
+                          judge_id: null,
+                          date: hearingDate,
+                          description: hearingEntry.diary || '',
+                          type: 'Regular'
+                        });
+                        newHearings.push(hearing);
+                        console.log(`DEBUG: Created new hearing for existing case: ${hearingDate} - ${hearingEntry.diary || 'No diary'}`);
+                      } catch (error) {
+                        console.error(`Error creating new hearing for existing case ${caseObj.caseCode}:`, error);
+                      }
+                    }
+                  }
+                }
+              }
+              
+              if (newHearings.length > 0) {
+                results.successful.push({
+                  index: i,
+                  caseCode: caseObj.caseCode,
+                  createdCase: null,
+                  existingCase: existingCase,
+                  createdLawyers: [],
+                  createdParties: [],
+                  createdCaseLawyers: [],
+                  createdHearings: newHearings,
+                  message: `Added ${newHearings.length} new hearing(s) to existing case`
+                });
+                results.summary.created++;
+              } else {
+                results.failed.push({
+                  index: i,
+                  caseCode: caseObj.caseCode,
+                  error: 'Case already exists and is connected to your account. No new hearings found.',
+                  existingCaseId: existingCase.case_id
+                });
+                results.summary.failed++;
+              }
               continue;
             } else {
               // Case exists but user is not connected - create the connection
               console.log(`DEBUG: Case exists but user not connected. Creating connection for user ${userId}`);
               
-              // Create/find lawyers from the case profile
+              // Extract required data from profile for creating relationships
+              const caseDetails = profileData.caseDetails;
+              const parties = profileData.parties || '';
+              const advocate1 = caseDetails['Advocate 1'] || '';
+              const advocate2 = caseDetails['Advocate 2'] || '';
+              
+              // Create parties and lawyers just like for new cases
               const createdLawyers = [];
               if (advocate1 && advocate1.trim()) {
                 try {
@@ -1062,7 +781,7 @@ class CourtSearchController {
                 }
               }
 
-              // Create/find parties from the case profile
+              // Create parties
               const createdParties = [];
               if (parties && parties.trim()) {
                 const partiesArray = parties.split(/\s+V\/S\s+/i).map(p => p.trim()).filter(p => p);
@@ -1103,48 +822,21 @@ class CourtSearchController {
                 }
               }
 
-              // Connect the existing case to the user through case_lawyers table
+              // Create case_lawyers relationships for the existing case
               const createdCaseLawyers = [];
               if (createdLawyers.length > 0 && createdParties.length > 0) {
-                // Create connections for each lawyer-party combination
                 for (const lawyer of createdLawyers) {
                   if (!lawyer || !lawyer.lawyer_id) continue;
                   for (const party of createdParties) {
                     if (!party || !party.party_id) continue;
                     try {
-                      // Check if this specific case-lawyer-party-user combination already exists
-                      const existingRelation = await query(
-                        'SELECT * FROM case_lawyers WHERE case_id = $1 AND lawyer_id = $2 AND party_id = $3 AND user_id = $4',
-                        [existingCase.case_id, lawyer.lawyer_id, party.party_id, userId]
-                      );
-                      
-                      if (existingRelation.rows.length === 0) {
-                        // Check if case-lawyer-party exists for ANY user
-                        const anyUserRelation = await query(
-                          'SELECT * FROM case_lawyers WHERE case_id = $1 AND lawyer_id = $2 AND party_id = $3',
-                          [existingCase.case_id, lawyer.lawyer_id, party.party_id]
-                        );
-                        
-                        if (anyUserRelation.rows.length > 0) {
-                          // Update existing relation to include this user
-                          await query(
-                            'UPDATE case_lawyers SET user_id = $1 WHERE case_id = $2 AND lawyer_id = $3 AND party_id = $4',
-                            [userId, existingCase.case_id, lawyer.lawyer_id, party.party_id]
-                          );
-                          console.log(`Updated existing case-lawyer-party relationship to include user ${userId}`);
-                        } else {
-                          // Create new relation
-                          const caseLawyerRelation = await CaseLawyer.create({
-                            case_id: existingCase.case_id,
-                            lawyer_id: lawyer.lawyer_id,
-                            party_id: party.party_id,
-                            user_id: userId
-                          });
-                          createdCaseLawyers.push(caseLawyerRelation);
-                        }
-                      } else {
-                        console.log(`Case-lawyer-party relationship already exists for user ${userId}`);
-                      }
+                      const caseLawyerRelation = await CaseLawyer.create({
+                        case_id: existingCase.case_id,
+                        lawyer_id: lawyer.lawyer_id,
+                        party_id: party.party_id,
+                        user_id: userId
+                      });
+                      createdCaseLawyers.push(caseLawyerRelation);
                     } catch (error) {
                       console.error(`Error creating case-lawyer relationship for existing case ${caseObj.caseCode}:`, error);
                     }
@@ -1155,132 +847,16 @@ class CourtSearchController {
                 for (const party of createdParties) {
                   if (!party || !party.party_id) continue;
                   try {
-                    // Check if this specific case-party-user combination already exists (with null lawyer)
-                    const existingRelation = await query(
-                      'SELECT * FROM case_lawyers WHERE case_id = $1 AND lawyer_id IS NULL AND party_id = $2 AND user_id = $3',
-                      [existingCase.case_id, party.party_id, userId]
-                    );
-                    
-                    if (existingRelation.rows.length === 0) {
-                      // Check if case-party exists for ANY user (with null lawyer)
-                      const anyUserRelation = await query(
-                        'SELECT * FROM case_lawyers WHERE case_id = $1 AND lawyer_id IS NULL AND party_id = $2',
-                        [existingCase.case_id, party.party_id]
-                      );
-                      
-                      if (anyUserRelation.rows.length > 0) {
-                        // Update existing relation to include this user
-                        await query(
-                          'UPDATE case_lawyers SET user_id = $1 WHERE case_id = $2 AND lawyer_id IS NULL AND party_id = $3',
-                          [userId, existingCase.case_id, party.party_id]
-                        );
-                        console.log(`Updated existing case-party relationship (no lawyer) to include user ${userId}`);
-                      } else {
-                        // Create new relation
-                        const caseLawyerRelation = await CaseLawyer.create({
-                          case_id: existingCase.case_id,
-                          lawyer_id: null,
-                          party_id: party.party_id,
-                          user_id: userId
-                        });
-                        createdCaseLawyers.push(caseLawyerRelation);
-                      }
-                    } else {
-                      console.log(`Case-party relationship (no lawyer) already exists for user ${userId}`);
-                    }
+                    const caseLawyerRelation = await CaseLawyer.create({
+                      case_id: existingCase.case_id,
+                      lawyer_id: null,
+                      party_id: party.party_id,
+                      user_id: userId
+                    });
+                    createdCaseLawyers.push(caseLawyerRelation);
                   } catch (error) {
                     console.error(`Error creating case-party relationship for existing case ${caseObj.caseCode}:`, error);
                   }
-                }
-              }
-
-              // Add any new hearings using the existing updateCaseHearings logic
-              const createdHearings = [];
-              if (hearingHistory && hearingHistory.length > 0) {
-                try {
-                  console.log(`DEBUG: Calling updateCaseHearings for existing case ${existingCase.case_id}`);
-                  
-                  // Simulate the updateCaseHearings logic for this single case
-                  const Case = require('../models/Case');
-                  const Hearing = require('../models/Hearing');
-                  
-                  // Get case profile data (we already have it)
-                  const profileData = { hearingHistory: hearingHistory };
-                  
-                  // Get existing hearings from database
-                  const existingHearings = await query(
-                    'SELECT date, description FROM hearings WHERE case_id = $1',
-                    [existingCase.case_id]
-                  );
-                  
-                  // Remove duplicates from profile hearings before processing
-                  const profileHearings = CourtSearchController.removeDuplicateHearings(profileData.hearingHistory);
-                  
-                  // Clear existing hearings and re-add from profile to ensure accuracy
-                  if (profileHearings.length > 0) {
-                    console.log(`Clearing existing hearings for case ${existingCase.case_id} to avoid date conflicts...`);
-                    await query('DELETE FROM hearings WHERE case_id = $1', [existingCase.case_id]);
-                    console.log(`Cleared existing hearings for case ${existingCase.case_id}`);
-                  }
-                  
-                  let addedHearings = 0;
-                  
-                  // Add all hearings from profile
-                  for (const profileHearing of profileHearings) {
-                    if (!profileHearing.date) continue;
-
-                    const hearingDate = profileHearing.date; // Already normalized
-                    const profileDiary = (profileHearing.diary || '').trim();
-
-                    try {
-                      const newHearing = await Hearing.create({
-                        case_id: existingCase.case_id,
-                        judge_id: null,
-                        date: hearingDate,
-                        description: profileDiary,
-                        type: 'Regular'
-                      });
-                      createdHearings.push(newHearing);
-                      addedHearings++;
-                      console.log(`Added hearing for case ${existingCase.case_id} on ${hearingDate} with: ${profileDiary || 'BLANK'}`);
-                    } catch (error) {
-                      console.error(`Error creating hearing for case ${existingCase.case_id} on ${hearingDate}:`, error);
-                    }
-                  }
-
-                  // Update case status and next hearing date based on latest hearing
-                  if (profileHearings.length > 0) {
-                    const sortedProfileHearings = profileHearings
-                      .filter(h => h.date && !isNaN(new Date(h.date).getTime()))
-                      .sort((a, b) => new Date(b.date) - new Date(a.date));
-
-                    if (sortedProfileHearings.length > 0) {
-                      const latestProfileHearing = sortedProfileHearings[0];
-                      const latestProfileDiary = (latestProfileHearing.diary || '').trim();
-
-                      if (latestProfileDiary) {
-                        // Latest hearing is not blank - case is disposed
-                        await query(
-                          'UPDATE cases SET status = $1, next_hearing = NULL WHERE case_id = $2',
-                          ['Disposed', existingCase.case_id]
-                        );
-                        console.log(`Updated case ${existingCase.case_id} status to Disposed`);
-                      } else {
-                        // Latest hearing is blank - set next hearing date
-                        const latestDate = new Date(latestProfileHearing.date).toISOString().split('T')[0];
-                        await query(
-                          'UPDATE cases SET next_hearing = $1 WHERE case_id = $2',
-                          [latestDate, existingCase.case_id]
-                        );
-                        console.log(`Updated next hearing date for case ${existingCase.case_id} to ${latestDate}`);
-                      }
-                    }
-                  }
-                  
-                  console.log(`Successfully updated hearings for existing case ${existingCase.case_id}: ${addedHearings} hearings added`);
-                  
-                } catch (error) {
-                  console.error(`Error updating hearings for existing case ${caseObj.caseCode}:`, error);
                 }
               }
 
@@ -1292,8 +868,8 @@ class CourtSearchController {
                 createdLawyers: createdLawyers,
                 createdParties: createdParties,
                 createdCaseLawyers: createdCaseLawyers,
-                createdHearings: createdHearings,
-                message: `Connected existing case to your account. Added ${createdHearings.length} new hearings.`
+                createdHearings: [], // Don't duplicate hearings for existing cases
+                message: 'Connected existing case to your account'
               });
               results.summary.created++;
               
@@ -1468,15 +1044,17 @@ class CourtSearchController {
 
           // Create hearings
           const createdHearings = [];
-          console.log(`DEBUG: Creating hearings for case ${caseObj.caseCode}. Hearing history count: ${hearingHistory.length}`);
-          
           for (const hearingEntry of hearingHistory) {
             // Create hearing if we have a date, even if diary is empty
             if (hearingEntry.date) {
               try {
-                // Use the enhanced date parsing function
-                let hearingDate = CourtSearchController.parseCourtDate(hearingEntry.date);
-                console.log(`DEBUG: Processing hearing date "${hearingEntry.date}" -> "${hearingDate}"`);
+                let hearingDate = null;
+                if (hearingEntry.date) {
+                  const parsedDate = new Date(hearingEntry.date);
+                  if (!isNaN(parsedDate.getTime())) {
+                    hearingDate = parsedDate.toISOString().split('T')[0];
+                  }
+                }
 
                 if (hearingDate) {
                   const hearing = await Hearing.create({
@@ -1487,15 +1065,10 @@ class CourtSearchController {
                     type: 'Regular'
                   });
                   createdHearings.push(hearing);
-                  console.log(`DEBUG: Created hearing for ${hearingDate} with diary: "${hearingEntry.diary || 'BLANK'}"`);
-                } else {
-                  console.warn(`DEBUG: Could not parse hearing date: "${hearingEntry.date}"`);
                 }
               } catch (error) {
                 console.error(`Error creating hearing for case ${caseObj.caseCode}:`, error);
               }
-            } else {
-              console.warn(`DEBUG: Hearing entry has no date:`, hearingEntry);
             }
           }
 
@@ -1552,188 +1125,6 @@ class CourtSearchController {
         error: error.message
       });
     }
-  }
-
-
-  // Helper function to parse court system dates with multiple format support
-  static parseCourtDate(dateString) {
-    if (!dateString || typeof dateString !== 'string') {
-      return null;
-    }
-
-    const cleanDate = dateString.trim();
-    if (!cleanDate || cleanDate === 'No Date Fixed' || cleanDate === 'BLANK') {
-      return null;
-    }
-
-    console.log(`DEBUG: Parsing date: "${cleanDate}"`);
-
-    // Handle various date formats that might come from the court system
-    const dateFormats = [
-      /(\d{1,2})\/(\w{3})\/(\d{4})/,  // 27/Sep/2025
-      /(\d{1,2})-(\w{3})-(\d{4})/,   // 27-Sep-2025
-      /(\d{1,2})\/(\d{1,2})\/(\d{4})/, // 27/09/2025
-      /(\d{4})-(\d{1,2})-(\d{1,2})/,   // 2025-09-27
-      /(\d{1,2})-(\d{1,2})-(\d{4})/,   // 27-09-2025
-      /(\d{1,2})\.(\d{1,2})\.(\d{4})/  // 27.09.2025
-    ];
-    
-    for (const format of dateFormats) {
-      const match = cleanDate.match(format);
-      if (match) {
-        if (format === dateFormats[0] || format === dateFormats[1]) {
-          // Handle month abbreviations like "Sep", "Oct", "Aug"
-          const day = match[1].padStart(2, '0');
-          const monthAbbr = match[2];
-          const year = match[3];
-          
-          const monthMap = {
-            'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
-            'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
-            'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
-          };
-          
-          if (monthMap[monthAbbr]) {
-            const result = `${year}-${monthMap[monthAbbr]}-${day}`;
-            console.log(`DEBUG: Parsed "${cleanDate}" -> "${result}"`);
-            return result;
-          }
-        } else if (format === dateFormats[2] || format === dateFormats[4] || format === dateFormats[5]) {
-          // Handle DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY formats
-          const day = match[1].padStart(2, '0');
-          const month = match[2].padStart(2, '0');
-          const year = match[3];
-          const result = `${year}-${month}-${day}`;
-          console.log(`DEBUG: Parsed "${cleanDate}" -> "${result}"`);
-          return result;
-        } else if (format === dateFormats[3]) {
-          // Already in YYYY-MM-DD format
-          console.log(`DEBUG: Date already in correct format: "${cleanDate}"`);
-          return cleanDate;
-        }
-        break;
-      }
-    }
-
-    // Try parsing as a standard date but be careful with timezone issues
-    try {
-      const parsedDate = new Date(cleanDate + 'T12:00:00'); // Add noon time to avoid timezone issues
-      if (!isNaN(parsedDate.getTime())) {
-        const result = parsedDate.toISOString().split('T')[0];
-        console.log(`DEBUG: Fallback parsed "${cleanDate}" -> "${result}"`);
-        return result;
-      }
-    } catch (error) {
-      console.warn(`Could not parse date with fallback: "${cleanDate}"`);
-    }
-
-    console.warn(`Could not parse date: "${cleanDate}"`);
-    return null;
-  }
-
-  // Helper function to extract party names from parties string
-  static extractPartyNames(partiesString) {
-    if (!partiesString || typeof partiesString !== 'string') {
-      return [];
-    }
-
-    // Split by common separators used in court cases
-    const separators = [' V/S ', ' VS ', ' v/s ', ' vs ', ' V/s ', ' v/S '];
-    let parties = [partiesString];
-    
-    for (const separator of separators) {
-      const newParties = [];
-      for (const party of parties) {
-        newParties.push(...party.split(separator));
-      }
-      parties = newParties;
-    }
-
-    // Clean up party names and remove empty entries
-    return parties
-      .map(party => party.trim())
-      .filter(party => party && party !== '&' && party !== 'OTHERS' && party !== 'others')
-      .map(party => {
-        // Remove common prefixes and suffixes
-        return party
-          .replace(/^(Mr\.|Mrs\.|Ms\.|Dr\.|Mst\.|Miss)\s*/i, '')
-          .replace(/\s*&\s*[Oo]thers?$/i, '')
-          .replace(/\s*[Ee]tc\.?$/i, '')
-          .trim();
-      })
-      .filter(party => party.length > 0);
-  }
-
-  // Helper function to remove duplicate hearings based on date and diary content
-  static removeDuplicateHearings(hearings) {
-    if (!hearings || !Array.isArray(hearings) || hearings.length === 0) {
-      return [];
-    }
-
-    const dateMap = new Map(); // Map of date -> hearing object
-    
-    for (const hearing of hearings) {
-      // Skip hearings without valid dates
-      if (!hearing.date) continue;
-
-      // The date should already be normalized from parseCaseProfile
-      let hearingDate = hearing.date;
-      
-      // Validate the date format (should be YYYY-MM-DD)
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(hearingDate)) {
-        console.warn(`Invalid date format: ${hearingDate}, skipping hearing`);
-        continue;
-      }
-
-      // Clean and normalize diary content
-      const diary = (hearing.diary || '').replace(/\s+/g, ' ').trim();
-      
-      // Check if we already have a hearing for this date
-      if (dateMap.has(hearingDate)) {
-        const existingHearing = dateMap.get(hearingDate);
-        const existingDiary = (existingHearing.diary || '').trim();
-        
-        // If existing hearing is blank and new one has content, replace it
-        if (!existingDiary && diary) {
-          dateMap.set(hearingDate, {
-            ...hearing,
-            date: hearingDate,
-            diary: diary
-          });
-          console.log(`Replaced blank hearing with content for ${hearingDate}: "${diary}"`);
-        } else if (!diary && existingDiary) {
-          // Keep the existing one with content
-          console.log(`Kept existing hearing with content for ${hearingDate}: "${existingDiary}"`);
-        } else if (diary && existingDiary) {
-          // Both have content, keep the first one (or you could implement other logic)
-          console.log(`Duplicate hearing with content removed for ${hearingDate}: "${diary}"`);
-        } else {
-          // Both are blank, keep the first one
-          console.log(`Duplicate blank hearing removed for ${hearingDate}`);
-        }
-      } else {
-        // First hearing for this date
-        dateMap.set(hearingDate, {
-          ...hearing,
-          date: hearingDate,
-          diary: diary
-        });
-      }
-    }
-
-    // Convert map back to array and sort by date
-    const uniqueHearings = Array.from(dateMap.values());
-    uniqueHearings.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    console.log(`Processed ${hearings.length} hearings. Unique: ${uniqueHearings.length}, Duplicates removed: ${hearings.length - uniqueHearings.length}`);
-    
-    // Log the final hearing list for debugging
-    console.log('Final unique hearings after duplicate removal:');
-    uniqueHearings.forEach((h, index) => {
-      console.log(`  ${index + 1}. ${h.date} - "${h.diary || 'BLANK'}"${h.originalDate ? ` (original: ${h.originalDate})` : ''}`);
-    });
-    
-    return uniqueHearings;
   }
 
   // Helper function to get case profile data (extracted logic from getCaseProfile)
@@ -2009,6 +1400,794 @@ class CourtSearchController {
     }
   }
 
+  // Helper function to remove duplicate hearings for a case
+  static async removeDuplicateHearings(caseId) {
+    try {
+      console.log(`🔍 Checking for duplicate hearings in case ID: ${caseId}`);
+      
+      // Get all hearings for this case
+      const existingHearingsResult = await query(
+        'SELECT hearing_id, date, description FROM hearings WHERE case_id = $1 ORDER BY date DESC, hearing_id ASC',
+        [caseId]
+      );
+      const existingHearings = existingHearingsResult.rows;
+      
+      if (existingHearings.length === 0) {
+        console.log(`No hearings found for case ${caseId}`);
+        return { duplicatesRemoved: [], message: 'No hearings found' };
+      }
+
+      // Group hearings by date to detect duplicates
+      const hearingsByDate = new Map();
+      const duplicatesRemoved = [];
+      
+      existingHearings.forEach(hearing => {
+        const dateKey = hearing.date;
+        
+        if (!hearingsByDate.has(dateKey)) {
+          hearingsByDate.set(dateKey, []);
+        }
+        hearingsByDate.get(dateKey).push(hearing);
+      });
+
+      // Process each date group
+      for (const [date, hearingGroup] of hearingsByDate) {
+        if (hearingGroup.length > 1) {
+          console.log(`🚨 Found ${hearingGroup.length} duplicate hearings for date: ${date}`);
+          
+          // Sort by: 1) has content first, 2) then by hearing_id (first created)
+          hearingGroup.sort((a, b) => {
+            const aHasContent = a.description && a.description.trim() !== '';
+            const bHasContent = b.description && b.description.trim() !== '';
+            
+            // Prioritize hearings with content
+            if (aHasContent && !bHasContent) return -1;
+            if (!aHasContent && bHasContent) return 1;
+            
+            // If both have content or both are blank, keep the first created (lower ID)
+            return a.hearing_id - b.hearing_id;
+          });
+          
+          // Keep the first (best) hearing, delete the rest
+          const keepHearing = hearingGroup[0];
+          const duplicatesToDelete = hearingGroup.slice(1);
+          
+          console.log(`📌 Keeping hearing ID ${keepHearing.hearing_id} (${keepHearing.description ? 'has content' : 'blank'})`);
+          
+          for (const duplicate of duplicatesToDelete) {
+            try {
+              await query('DELETE FROM hearings WHERE hearing_id = $1', [duplicate.hearing_id]);
+              
+              duplicatesRemoved.push({
+                hearing_id: duplicate.hearing_id,
+                date: duplicate.date,
+                description: duplicate.description,
+                reason: `Duplicate of hearing ID ${keepHearing.hearing_id}`
+              });
+              
+              console.log(`🗑️ Deleted duplicate hearing ID ${duplicate.hearing_id} on ${duplicate.date}`);
+            } catch (error) {
+              console.error(`Error deleting duplicate hearing ${duplicate.hearing_id}:`, error);
+            }
+          }
+        }
+      }
+
+      const message = duplicatesRemoved.length > 0 
+        ? `Removed ${duplicatesRemoved.length} duplicate hearing(s)`
+        : 'No duplicates found';
+      
+      console.log(`✅ Duplicate removal completed for case ${caseId}: ${message}`);
+      
+      return {
+        duplicatesRemoved: duplicatesRemoved,
+        message: message,
+        totalDuplicatesRemoved: duplicatesRemoved.length
+      };
+      
+    } catch (error) {
+      console.error(`Error removing duplicates for case ${caseId}:`, error);
+      throw error;
+    }
   }
- 
+
+  // Update case hearings based on court profile data
+  static async updateCaseHearings(req, res) {
+    try {
+      const userId = req.user ? req.user.user_id : null;
+      const { caseIds } = req.body;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'User authentication required'
+        });
+      }
+
+      if (!caseIds || !Array.isArray(caseIds) || caseIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'caseIds array is required and must not be empty'
+        });
+      }
+
+      console.log(`Starting hearing update for ${caseIds.length} case(s) by user ${userId}`);
+
+      // Verify user has access to these cases
+      const placeholders = caseIds.map((_, index) => `$${index + 2}`).join(',');
+      const userCasesResult = await query(
+        `SELECT DISTINCT c.case_id, c.cfms_case_code, c.case_number, c.status, c.next_hearing
+         FROM cases c
+         INNER JOIN case_lawyers cl ON c.case_id = cl.case_id
+         WHERE cl.user_id = $1 AND c.cfms_case_code IS NOT NULL 
+         AND c.case_id IN (${placeholders})`,
+        [userId, ...caseIds]
+      );
+
+      if (userCasesResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'No accessible cases found with the provided IDs'
+        });
+      }
+
+      const Case = require('../models/Case');
+      const Hearing = require('../models/Hearing');
+      
+      const results = {
+        totalCases: userCasesResult.rows.length,
+        updatedCases: 0,
+        failedCases: 0,
+        results: []
+      };
+
+      // Process each case
+      for (const caseRecord of userCasesResult.rows) {
+        const caseId = caseRecord.case_id;
+        const cfmsCaseCode = caseRecord.cfms_case_code;
+        
+        try {
+          console.log(`Processing case ${caseRecord.case_number} (ID: ${caseId}, CFMS: ${cfmsCaseCode})`);
+
+          // Step 0: Remove duplicate hearings first
+          const duplicateRemovalResult = await CourtSearchController.removeDuplicateHearings(caseId);
+          
+          // Step 1: Get court profile data
+          const profileData = await CourtSearchController.getCaseProfileData(cfmsCaseCode);
+          
+          if (!profileData || !profileData.hearingHistory) {
+            results.failedCases++;
+            results.results.push({
+              caseId: caseId,
+              caseNumber: caseRecord.case_number,
+              cfmsCaseCode: cfmsCaseCode,
+              success: false,
+              error: 'Failed to retrieve case profile or hearing history from court system'
+            });
+            continue;
+          }
+
+          // Step 2: Get existing hearings from database (after duplicate removal)
+          const existingHearingsResult = await query(
+            'SELECT hearing_id, date, description FROM hearings WHERE case_id = $1 ORDER BY date DESC',
+            [caseId]
+          );
+          const existingHearings = existingHearingsResult.rows;
+
+          // Step 3: Process court profile hearings
+          const courtHearings = profileData.hearingHistory
+            .filter(entry => entry.date)
+            .map(entry => {
+              const parsedDate = new Date(entry.date);
+              return {
+                date: !isNaN(parsedDate.getTime()) ? parsedDate.toISOString().split('T')[0] : null,
+                description: entry.diary || '',
+                isBlank: !entry.diary || entry.diary.trim() === ''
+              };
+            })
+            .filter(entry => entry.date)
+            .sort((a, b) => new Date(b.date) - new Date(a.date)); // Sort by date DESC
+
+          if (courtHearings.length === 0) {
+            results.failedCases++;
+            results.results.push({
+              caseId: caseId,
+              caseNumber: caseRecord.case_number,
+              cfmsCaseCode: cfmsCaseCode,
+              success: false,
+              error: 'No valid hearings found in court profile'
+            });
+            continue;
+          }
+
+          // Find latest hearing date from existing DB hearings
+          const latestDbHearingDate = existingHearings.length > 0 ? existingHearings[0].date : null;
+          const latestCourtHearing = courtHearings[0]; // Latest from court profile
+
+          console.log(`Latest DB hearing: ${latestDbHearingDate || 'None'}`);
+          console.log(`Latest court hearing: ${latestCourtHearing.date} (${latestCourtHearing.isBlank ? 'blank' : 'has content'})`);
+
+          // Step 4: Determine which hearings to process
+          let hearingsToProcess = [];
+          
+          if (!latestDbHearingDate) {
+            // No existing hearings - add all court hearings
+            hearingsToProcess = courtHearings;
+          } else {
+            // Filter court hearings: include latest DB date and all after
+            hearingsToProcess = courtHearings.filter(hearing => hearing.date >= latestDbHearingDate);
+          }
+
+          console.log(`Processing ${hearingsToProcess.length} hearings from court profile`);
+
+          // Step 5: Update/Add hearings
+          const updatedHearings = [];
+          const newHearings = [];
+          const existingHearingMap = new Map();
+          
+          // Create map of existing hearings by date
+          existingHearings.forEach(hearing => {
+            existingHearingMap.set(hearing.date, hearing);
+          });
+
+          for (const courtHearing of hearingsToProcess) {
+            const existingHearing = existingHearingMap.get(courtHearing.date);
+            
+            if (existingHearing) {
+              // Hearing exists - check if we need to update it
+              const existingDesc = (existingHearing.description || '').trim();
+              const newDesc = courtHearing.description.trim();
+              
+              if (existingDesc !== newDesc) {
+                // Update existing hearing
+                try {
+                  await query(
+                    'UPDATE hearings SET description = $1 WHERE hearing_id = $2',
+                    [courtHearing.description, existingHearing.hearing_id]
+                  );
+                  
+                  updatedHearings.push({
+                    hearing_id: existingHearing.hearing_id,
+                    date: courtHearing.date,
+                    old_description: existingDesc,
+                    new_description: newDesc,
+                    was_blank: existingDesc === '',
+                    now_blank: newDesc === ''
+                  });
+                  
+                  console.log(`Updated hearing ${courtHearing.date}: "${existingDesc}" → "${newDesc}"`);
+                } catch (error) {
+                  console.error(`Error updating hearing for ${courtHearing.date}:`, error);
+                }
+              }
+            } else {
+              // New hearing - create it
+              try {
+                const hearing = await Hearing.create({
+                  case_id: caseId,
+                  judge_id: null,
+                  date: courtHearing.date,
+                  description: courtHearing.description,
+                  type: 'Regular'
+                });
+                
+                newHearings.push({
+                  hearing_id: hearing.hearing_id,
+                  date: courtHearing.date,
+                  description: courtHearing.description,
+                  is_blank: courtHearing.isBlank
+                });
+                
+                console.log(`Created new hearing ${courtHearing.date}: "${courtHearing.description || 'blank'}"`);
+              } catch (error) {
+                console.error(`Error creating hearing for ${courtHearing.date}:`, error);
+              }
+            }
+          }
+
+          // Step 6: Determine case status and next hearing based on latest court hearing
+          const caseUpdates = {};
+          
+          if (latestCourtHearing.isBlank) {
+            // Latest hearing is blank - case is still active
+            caseUpdates.next_hearing = latestCourtHearing.date;
+            console.log(`Case still active - next hearing: ${latestCourtHearing.date}`);
+          } else {
+            // Latest hearing has content - case is disposed
+            caseUpdates.status = 'Disposed';
+            caseUpdates.next_hearing = null;
+            console.log(`Case disposed - latest hearing has content`);
+          }
+
+          // Update other case fields from profile if available
+          if (profileData.caseDetails) {
+            if (profileData.caseDetails['Court']) {
+              caseUpdates.court_name = profileData.caseDetails['Court'];
+            }
+            if (profileData.caseDetails['Under Section']) {
+              caseUpdates.legal_section = profileData.caseDetails['Under Section'];
+            }
+          }
+
+          // Step 7: Apply case updates
+          if (Object.keys(caseUpdates).length > 0) {
+            try {
+              await Case.update(caseId, caseUpdates);
+              console.log(`Updated case ${caseRecord.case_number}:`, caseUpdates);
+            } catch (error) {
+              console.error(`Error updating case ${caseId}:`, error);
+            }
+          }
+
+          results.updatedCases++;
+          results.results.push({
+            caseId: caseId,
+            caseNumber: caseRecord.case_number,
+            cfmsCaseCode: cfmsCaseCode,
+            success: true,
+            latestDbHearingDate: latestDbHearingDate,
+            latestCourtHearingDate: latestCourtHearing.date,
+            latestCourtHearingIsBlank: latestCourtHearing.isBlank,
+            hearingsProcessed: hearingsToProcess.length,
+            newHearingsAdded: newHearings.length,
+            hearingsUpdated: updatedHearings.length,
+            caseUpdates: caseUpdates,
+            newHearings: newHearings,
+            updatedHearings: updatedHearings,
+            profileData: {
+              totalCourtHearings: courtHearings.length,
+              caseDetails: profileData.caseDetails
+            }
+          });
+
+          console.log(`Successfully processed case ${caseRecord.case_number}: ${newHearings.length} new, ${updatedHearings.length} updated hearings`);
+
+        } catch (error) {
+          console.error(`Error processing case ${caseId}:`, error);
+          results.failedCases++;
+          results.results.push({
+            caseId: caseId,
+            caseNumber: caseRecord.case_number,
+            cfmsCaseCode: cfmsCaseCode,
+            success: false,
+            error: error.message
+          });
+        }
+      }
+
+      console.log(`Hearing update completed. Updated: ${results.updatedCases}, Failed: ${results.failedCases}`);
+
+      res.json({
+        success: true,
+        message: `Processed ${results.totalCases} cases. Updated: ${results.updatedCases}, Failed: ${results.failedCases}`,
+        data: results
+      });
+
+    } catch (error) {
+      console.error('Error in updateCaseHearings:', error);
+      
+      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        return res.status(503).json({
+          success: false,
+          message: 'External court system is currently unavailable',
+          error: 'Connection failed'
+        });
+      }
+      
+      if (error.code === 'ECONNABORTED') {
+        return res.status(504).json({
+          success: false,
+          message: 'Hearing update request timed out',
+          error: 'Request timeout'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+        
+        const userCasesResult = await query(
+          `SELECT DISTINCT c.case_id, c.cfms_case_code, c.case_number, c.status, c.next_hearing
+           FROM cases c
+           INNER JOIN case_lawyers cl ON c.case_id = cl.case_id
+           WHERE cl.user_id = $1 AND c.cfms_case_code IS NOT NULL 
+           AND (c.next_hearing >= CURRENT_DATE AND c.next_hearing <= (CURRENT_DATE + INTERVAL '30 days'))`,
+          [userId]
+        );
+        userCases = userCasesResult.rows;
+      }
+      
+      if (userCases.length === 0) {
+        return res.json({
+          success: true,
+          message: 'No eligible cases found for hearing updates',
+          data: {
+            totalCases: 0,
+            updatedCases: 0,
+            failedCases: 0,
+            results: []
+          }
+        });
+      }
+
+      console.log(`Found ${userCases.length} eligible cases for hearing update`);
+
+      const Case = require('../models/Case');
+      const Hearing = require('../models/Hearing');
+      
+      const results = {
+        totalCases: userCases.length,
+        updatedCases: 0,
+        failedCases: 0,
+        results: []
+      };
+
+      // Process each case to update hearings
+      for (const caseRecord of userCases) {
+        const caseId = caseRecord.case_id;
+        const cfmsCaseCode = caseRecord.cfms_case_code;
+        
+        try {
+          console.log(`Processing case ${caseRecord.case_number} (ID: ${caseId}, CFMS: ${cfmsCaseCode})`);
+
+          // Get updated case profile from court system
+          const profileData = await CourtSearchController.getCaseProfileData(cfmsCaseCode);
+          
+          if (!profileData) {
+            results.failedCases++;
+            results.results.push({
+              caseId: caseId,
+              caseNumber: caseRecord.case_number,
+              cfmsCaseCode: cfmsCaseCode,
+              success: false,
+              error: 'Failed to retrieve case profile from court system'
+            });
+            continue;
+          }
+
+          // Step 1: Get all existing hearings for this case
+          const existingHearingsResult = await query(
+            'SELECT hearing_id, date, description FROM hearings WHERE case_id = $1 ORDER BY date DESC',
+            [caseId]
+          );
+          const existingHearings = existingHearingsResult.rows;
+          
+          // Group existing hearings by date to detect and handle duplicates
+          const existingHearingGroups = new Map();
+          const existingHearingsByDate = new Map();
+          
+          existingHearings.forEach(hearing => {
+            const dateKey = hearing.date;
+            
+            // Group all hearings by date
+            if (!existingHearingGroups.has(dateKey)) {
+              existingHearingGroups.set(dateKey, []);
+            }
+            existingHearingGroups.get(dateKey).push(hearing);
+            
+            // Keep the first one for primary lookup (will be updated if duplicates exist)
+            if (!existingHearingsByDate.has(dateKey)) {
+              existingHearingsByDate.set(dateKey, hearing);
+            }
+          });
+
+          // Step 1.5: Handle duplicate hearings (remove all but one per date)
+          const duplicatesRemoved = [];
+          const currentDate = new Date();
+          currentDate.setHours(0, 0, 0, 0);
+          
+          for (const [date, hearingGroup] of existingHearingGroups) {
+            if (hearingGroup.length > 1) {
+              console.log(`🚨 DUPLICATES DETECTED for ${date}: ${hearingGroup.length} hearings`);
+              
+              // Keep the one with content if available, otherwise keep the first
+              let keepHearing = hearingGroup.find(h => h.description && h.description.trim() !== '') || hearingGroup[0];
+              
+              for (const hearing of hearingGroup) {
+                if (hearing.hearing_id !== keepHearing.hearing_id) {
+                  try {
+                    await query('DELETE FROM hearings WHERE hearing_id = $1', [hearing.hearing_id]);
+                    duplicatesRemoved.push({
+                      hearing_id: hearing.hearing_id,
+                      date: hearing.date,
+                      description: hearing.description,
+                      reason: 'Duplicate hearing removed'
+                    });
+                    console.log(`🗑️ Deleted duplicate hearing: ID ${hearing.hearing_id} on ${hearing.date}`);
+                  } catch (error) {
+                    console.error(`Error deleting duplicate hearing ${hearing.hearing_id}:`, error);
+                  }
+                }
+              }
+              
+              // Update the map to only contain the kept hearing
+              existingHearingsByDate.set(date, keepHearing);
+            }
+          }
+
+          // Step 2: Process hearing history from court profile
+          const hearingHistory = profileData.hearingHistory || [];
+
+          // Sort court hearings by date (most recent first)
+          const sortedCourtHearings = hearingHistory
+            .filter(entry => entry.date)
+            .map(entry => {
+              const parsedDate = new Date(entry.date);
+              return {
+                ...entry,
+                parsedDate: parsedDate,
+                dateString: !isNaN(parsedDate.getTime()) ? parsedDate.toISOString().split('T')[0] : null
+              };
+            })
+            .filter(entry => entry.dateString)
+            .sort((a, b) => b.parsedDate - a.parsedDate);
+
+          let latestHearingInProfile = null;
+          let nextHearingDate = null;
+          const processedHearingDates = new Set();
+          const newHearings = [];
+          const updatedHearings = [];
+
+          // Step 3: Process each hearing from court profile
+          for (const hearingEntry of sortedCourtHearings) {
+            const hearingDate = hearingEntry.dateString;
+            const hearingDescription = hearingEntry.diary || '';
+            
+            // Track latest hearing date
+            if (!latestHearingInProfile) {
+              latestHearingInProfile = hearingDate;
+            }
+            
+            // Mark this date as processed from court data
+            processedHearingDates.add(hearingDate);
+            
+            const existingHearing = existingHearingsByDate.get(hearingDate);
+            
+            if (existingHearing) {
+              // Hearing exists - check if we need to update the description
+              const existingDesc = (existingHearing.description || '').trim();
+              const newDesc = hearingDescription.trim();
+              
+              if (existingDesc !== newDesc) {
+                // Update the existing hearing with new description
+                try {
+                  await query(
+                    'UPDATE hearings SET description = $1 WHERE hearing_id = $2',
+                    [hearingDescription, existingHearing.hearing_id]
+                  );
+                  updatedHearings.push({
+                    hearing_id: existingHearing.hearing_id,
+                    date: hearingDate,
+                    old_description: existingDesc,
+                    new_description: newDesc
+                  });
+                  console.log(`Updated hearing for case ${caseRecord.case_number}: ${hearingDate}`);
+                } catch (error) {
+                  console.error(`Error updating hearing for case ${caseId}:`, error);
+                }
+              }
+            } else {
+              // New hearing - create it only if it has content or is a future date
+              const isBlankHearing = !hearingDescription || hearingDescription.trim() === '';
+              const hearingDateObj = new Date(hearingDate);
+              const isFuture = hearingDateObj >= currentDate;
+              
+              // Only create if it has content OR it's a future blank hearing
+              if (!isBlankHearing || isFuture) {
+                try {
+                  const hearing = await Hearing.create({
+                    case_id: caseId,
+                    judge_id: null,
+                    date: hearingDate,
+                    description: hearingDescription,
+                    type: 'Regular'
+                  });
+                  newHearings.push(hearing);
+                  console.log(`Created hearing for case ${caseRecord.case_number}: ${hearingDate} - ${hearingDescription || 'Blank'}`);
+                } catch (error) {
+                  console.error(`Error creating hearing for case ${caseId}:`, error);
+                }
+              }
+            }
+
+            // Step 4: Extract next hearing date from description if this is the latest hearing with content
+            if (hearingDate === latestHearingInProfile && hearingDescription && hearingDescription.trim() !== '') {
+              const nextDatePatterns = [
+                /(?:adjourned to|case.*?to)\s*(\d{1,2}[-\/]\d{1,2}[-\/]\d{4})/i,
+                /(?:next hearing|hearing on)\s*(\d{1,2}[-\/]\d{1,2}[-\/]\d{4})/i,
+                /(\d{1,2}[-\/]\d{1,2}[-\/]\d{4})\s*(?:for|next)/i
+              ];
+              
+              let nextDateMatch = null;
+              for (const pattern of nextDatePatterns) {
+                nextDateMatch = hearingDescription.match(pattern);
+                if (nextDateMatch) break;
+              }
+              
+              if (nextDateMatch) {
+                try {
+                  const extractedDate = nextDateMatch[1];
+                  let parsedNextDate;
+                  if (extractedDate.includes('-')) {
+                    const parts = extractedDate.split('-');
+                    parsedNextDate = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+                  } else if (extractedDate.includes('/')) {
+                    const parts = extractedDate.split('/');
+                    parsedNextDate = new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+                  }
+                  
+                  if (parsedNextDate && !isNaN(parsedNextDate.getTime())) {
+                    nextHearingDate = parsedNextDate.toISOString().split('T')[0];
+                    console.log(`Extracted next hearing date: ${nextHearingDate} from: "${hearingDescription}"`);
+                  }
+                } catch (error) {
+                  console.error(`Error parsing next hearing date from: "${nextDateMatch[1]}"`, error);
+                }
+              }
+            }
+          }
+
+          // Step 5: Clean up blank hearings that are no longer relevant
+          const deletedHearings = [];
+          
+          for (const existingHearing of existingHearings) {
+            const hearingDate = existingHearing.date;
+            const hearingDateObj = new Date(hearingDate);
+            const isBlankHearing = !existingHearing.description || existingHearing.description.trim() === '';
+            const isProcessedFromCourt = processedHearingDates.has(hearingDate);
+            const isFuture = hearingDateObj >= currentDate;
+            
+            // Delete blank hearings that are:
+            // 1. Not in the court data AND
+            // 2. Either in the past OR not the extracted next hearing date
+            if (isBlankHearing && !isProcessedFromCourt) {
+              const shouldDelete = !isFuture || (nextHearingDate && hearingDate !== nextHearingDate);
+              
+              if (shouldDelete) {
+                try {
+                  await query('DELETE FROM hearings WHERE hearing_id = $1', [existingHearing.hearing_id]);
+                  deletedHearings.push({
+                    hearing_id: existingHearing.hearing_id,
+                    date: hearingDate,
+                    reason: 'Outdated blank hearing removed'
+                  });
+                  console.log(`Deleted outdated blank hearing: ${hearingDate}`);
+                } catch (error) {
+                  console.error(`Error deleting hearing ${existingHearing.hearing_id}:`, error);
+                }
+              }
+            }
+          }
+
+          // Step 6: Create blank hearing for next hearing date if needed
+          if (nextHearingDate && !existingHearingsByDate.has(nextHearingDate) && !processedHearingDates.has(nextHearingDate)) {
+            try {
+              const nextHearing = await Hearing.create({
+                case_id: caseId,
+                judge_id: null,
+                date: nextHearingDate,
+                description: '',
+                type: 'Regular'
+              });
+              newHearings.push(nextHearing);
+              console.log(`Created blank hearing for extracted next date: ${nextHearingDate}`);
+            } catch (error) {
+              console.error(`Error creating next hearing for case ${caseId}:`, error);
+            }
+          }
+
+          // Step 7: Update case with next hearing date and other profile data
+          const caseUpdates = {};
+          
+          // Use extracted next hearing date or latest hearing from profile
+          if (nextHearingDate) {
+            caseUpdates.next_hearing = nextHearingDate;
+          } else if (latestHearingInProfile) {
+            caseUpdates.next_hearing = latestHearingInProfile;
+          }
+
+          // Update case status if available in profile
+          if (profileData.caseDetails && profileData.caseDetails['Status']) {
+            caseUpdates.status = profileData.caseDetails['Status'];
+          }
+
+          // Update court name if available
+          if (profileData.caseDetails && profileData.caseDetails['Court']) {
+            caseUpdates.court_name = profileData.caseDetails['Court'];
+          }
+
+          // Update legal section if available
+          if (profileData.caseDetails && profileData.caseDetails['Under Section']) {
+            caseUpdates.legal_section = profileData.caseDetails['Under Section'];
+          }
+
+          // Apply case updates if we have any
+          if (Object.keys(caseUpdates).length > 0) {
+            try {
+              await Case.update(caseId, caseUpdates);
+              console.log(`Updated case ${caseRecord.case_number} with:`, caseUpdates);
+            } catch (error) {
+              console.error(`Error updating case ${caseId}:`, error);
+            }
+          }
+
+          results.updatedCases++;
+          results.results.push({
+            caseId: caseId,
+            caseNumber: caseRecord.case_number,
+            cfmsCaseCode: cfmsCaseCode,
+            success: true,
+            newHearingsAdded: newHearings.length,
+            updatedHearingsCount: updatedHearings.length,
+            deletedHearingsCount: deletedHearings.length,
+            duplicatesRemovedCount: duplicatesRemoved.length,
+            totalHearingsInProfile: hearingHistory.length,
+            latestHearingDate: latestHearingInProfile,
+            extractedNextHearingDate: nextHearingDate,
+            caseUpdates: caseUpdates,
+            newHearings: newHearings.map(h => ({ date: h.date, description: h.description })),
+            updatedHearings: updatedHearings,
+            deletedHearings: deletedHearings,
+            duplicatesRemoved: duplicatesRemoved,
+            profileData: {
+              caseDetails: profileData.caseDetails,
+              hearingHistoryCount: hearingHistory.length
+            }
+          });
+
+          console.log(`Successfully processed case ${caseRecord.case_number}: ${newHearings.length} new, ${updatedHearings.length} updated, ${deletedHearings.length} deleted, ${duplicatesRemoved.length} duplicates removed hearings`);
+
+        } catch (error) {
+          console.error(`Error processing case ${caseId}:`, error);
+          results.failedCases++;
+          results.results.push({
+            caseId: caseId,
+            caseNumber: caseRecord.case_number,
+            cfmsCaseCode: cfmsCaseCode,
+            success: false,
+            error: error.message
+          });
+        }
+      }
+
+      console.log(`Targeted hearing update process completed for user ${userId}. Updated: ${results.updatedCases}, Failed: ${results.failedCases}`);
+
+      res.json({
+        success: true,
+        message: `Processed ${results.totalCases} cases. Updated: ${results.updatedCases}, Failed: ${results.failedCases}`,
+        data: results
+      });
+
+    } catch (error) {
+      console.error('Error in updateCaseHearings:', error);
+      
+      if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        return res.status(503).json({
+          success: false,
+          message: 'External court system is currently unavailable',
+          error: 'Connection failed'
+        });
+      }
+      
+      if (error.code === 'ECONNABORTED') {
+        return res.status(504).json({
+          success: false,
+          message: 'Hearing update request timed out',
+          error: 'Request timeout'
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+}
+
 module.exports = CourtSearchController;

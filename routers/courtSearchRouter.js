@@ -17,6 +17,9 @@ courtSearchRouter.post('/refresh-tokens', CourtSearchController.refreshTokens);
 // Get current token status
 courtSearchRouter.get('/token-status', CourtSearchController.getTokenStatus);
 
+// Update case hearings for user's associated cases
+courtSearchRouter.post('/update-hearings', authMiddleware, CourtSearchController.updateCaseHearings);
+
 // Create cases from court profiles
 courtSearchRouter.post('/create-cases', authMiddleware, CourtSearchController.createCasesFromProfiles);
 

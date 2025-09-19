@@ -513,6 +513,110 @@ class CaseController {
       });
     }
   }
+
+  // Get all pending case IDs for the authenticated user
+  static async getUserPendingCaseIds(req, res) {
+    try {
+      const user_id = req.user.user_id;
+      
+      // Use a single efficient query to get all pending case IDs for the user
+      const { query } = require('../lib/db');
+      
+      const result = await query(`
+        SELECT DISTINCT c.case_id 
+        FROM cases c
+        INNER JOIN case_lawyers cl ON c.case_id = cl.case_id
+        WHERE cl.user_id = $1 
+        AND (c.status ILIKE '%pending%' OR c.status IS NULL)
+        ORDER BY c.case_id ASC
+      `, [user_id]);
+
+      const pendingCaseIds = result.rows.map(row => row.case_id);
+
+      res.json({
+        success: true,
+        message: `Found ${pendingCaseIds.length} pending cases`,
+        data: {
+          caseIds: pendingCaseIds,
+          count: pendingCaseIds.length
+        }
+      });
+    } catch (error) {
+      console.error('Error in getUserPendingCaseIds:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
+
+  // Update hearings for all pending cases of the authenticated user
+  static async updatePendingCasesHearings(req, res) {
+    try {
+      const user_id = req.user.user_id;
+      
+      console.log(`Starting hearing updates for pending cases for user ${user_id}`);
+      
+      // First, get all pending case IDs for the user
+      const { query } = require('../lib/db');
+      
+      const result = await query(`
+        SELECT DISTINCT c.case_id 
+        FROM cases c
+        INNER JOIN case_lawyers cl ON c.case_id = cl.case_id
+        WHERE cl.user_id = $1 
+        AND (c.status ILIKE '%pending%' OR c.status IS NULL)
+        ORDER BY c.case_id ASC
+      `, [user_id]);
+
+      const pendingCaseIds = result.rows.map(row => row.case_id);
+
+      if (pendingCaseIds.length === 0) {
+        return res.json({
+          success: true,
+          message: 'No pending cases found for this user',
+          data: {
+            pendingCases: 0,
+            results: {
+              successful: [],
+              failed: [],
+              summary: {
+                total: 0,
+                updated: 0,
+                failed: 0
+              }
+            }
+          }
+        });
+      }
+
+      console.log(`Found ${pendingCaseIds.length} pending cases: [${pendingCaseIds.join(', ')}]`);
+
+      // Call the core hearing update function directly
+      const CourtSearchController = require('./CourtSearchController');
+      const updateResults = await CourtSearchController.updateCaseHearingsCore(pendingCaseIds, user_id);
+
+      // Return the results
+      res.json({
+        success: true,
+        message: `Updated hearings for ${pendingCaseIds.length} pending cases`,
+        data: {
+          pendingCases: pendingCaseIds.length,
+          pendingCaseIds: pendingCaseIds,
+          results: updateResults
+        }
+      });
+
+    } catch (error) {
+      console.error('Error in updatePendingCasesHearings:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = CaseController;
