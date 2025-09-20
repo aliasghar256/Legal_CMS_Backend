@@ -179,7 +179,8 @@ class UserController {
             name: user.name,
             email: user.email,
             license_no: user.license_no,
-            phone_number: user.phone_number
+            phone_number: user.phone_number,
+            created_at: user.created_at
           }
         }
       });

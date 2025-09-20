@@ -2,22 +2,6 @@ const { query } = require('../lib/db');
 const bcrypt = require('bcrypt');
 
 class User {
-  // Helper method to format timestamp to Pakistani timezone
-  static formatToPakistaniTime(timestamp) {
-    if (!timestamp) return null;
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
-      timeZone: 'Asia/Karachi',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    });
-  }
-
   // Create a new user (signup)
   static async create({ name, email, password, license_no = null, phone_number = null }) {
     try {
@@ -25,20 +9,14 @@ class User {
       const saltRounds = 12;
       const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-      // Let PostgreSQL set created_at automatically with DEFAULT CURRENT_TIMESTAMP
       const result = await query(
         `INSERT INTO users (email, password, name, license_no, phone_number) 
          VALUES ($1, $2, $3, $4, $5) 
-         RETURNING user_id, name, email, license_no, phone_number, created_at`,
+         RETURNING user_id, name, email, license_no, phone_number`,
         [email, hashedPassword, name, license_no, phone_number]
       );
 
-      // Format the created_at to Pakistani time for display
-      const user = result.rows[0];
-      return {
-        ...user,
-        created_at_formatted: this.formatToPakistaniTime(user.created_at)
-      };
+      return result.rows[0];
     } catch (error) {
       throw error;
     }
@@ -48,16 +26,10 @@ class User {
   static async findByEmail(email) {
     try {
       const result = await query(
-        `SELECT user_id, email, password, name, license_no, phone_number, created_at
-         FROM users WHERE email = $1`,
+        'SELECT * FROM users WHERE email = $1',
         [email]
       );
-      
-      const user = result.rows[0];
-      if (user) {
-        user.created_at_formatted = this.formatToPakistaniTime(user.created_at);
-      }
-      return user;
+      return result.rows[0];
     } catch (error) {
       throw error;
     }
@@ -67,16 +39,10 @@ class User {
   static async findById(user_id) {
     try {
       const result = await query(
-        `SELECT user_id, name, email, license_no, phone_number, created_at
-         FROM users WHERE user_id = $1`,
+        'SELECT user_id, name, email, license_no, phone_number, created_at FROM users WHERE user_id = $1',
         [user_id]
       );
-      
-      const user = result.rows[0];
-      if (user) {
-        user.created_at_formatted = this.formatToPakistaniTime(user.created_at);
-      }
-      return user;
+      return result.rows[0];
     } catch (error) {
       throw error;
     }
@@ -86,18 +52,10 @@ class User {
   static async findAll(limit = 50, offset = 0) {
     try {
       const result = await query(
-        `SELECT user_id, name, email, license_no, phone_number, created_at
-         FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+        'SELECT user_id, name, email, license_no, phone_number FROM users ORDER BY name LIMIT $1 OFFSET $2',
         [limit, offset]
       );
-      
-      // Format created_at for all users
-      const users = result.rows.map(user => ({
-        ...user,
-        created_at_formatted: this.formatToPakistaniTime(user.created_at)
-      }));
-      
-      return users;
+      return result.rows;
     } catch (error) {
       throw error;
     }
@@ -125,15 +83,11 @@ class User {
       values.push(user_id);
       const result = await query(
         `UPDATE users SET ${fields.join(', ')} WHERE user_id = $${paramCount} 
-         RETURNING user_id, name, email, license_no, phone_number, created_at`,
+         RETURNING user_id, name, email, license_no, phone_number`,
         values
       );
 
-      const user = result.rows[0];
-      if (user) {
-        user.created_at_formatted = this.formatToPakistaniTime(user.created_at);
-      }
-      return user;
+      return result.rows[0];
     } catch (error) {
       throw error;
     }
