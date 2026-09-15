@@ -563,8 +563,9 @@ class CourtSearchController {
     if (profile.caseDetails['Case No']) {
       const caseNoText = profile.caseDetails['Case No'];
       
-      // Extract case number and parties
-      const caseMatch = caseNoText.match(/^(.*?),\s+(.+?)\s+(\d+)$/);
+      // Extract case number and parties (case code may be followed by trailing
+      // text like "Not Scanned", so don't anchor the digits to end-of-string)
+      const caseMatch = caseNoText.match(/^(.*?),\s+(.+?)\s+(\d+)/);
       if (caseMatch) {
         profile.caseNumber = caseMatch[1].trim();
         profile.parties = caseMatch[2].trim();
