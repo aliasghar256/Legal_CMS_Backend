@@ -18,6 +18,10 @@
 
 const reminderScheduler = require('./reminderScheduler');
 
+
+
+
+
 // Parse command line arguments
 const args = process.argv.slice(2);
 const options = {};
