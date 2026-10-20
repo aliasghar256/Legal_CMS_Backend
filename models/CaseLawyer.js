@@ -466,6 +466,26 @@ class CaseLawyer {
       throw error;
     }
   }
+
+  /**
+   * Get just the case IDs a user has access to.
+   * getCasesByUserId() issues an extra query per case to attach lawyer/party
+   * details; callers that only need IDs for scoping should use this instead.
+   * @param {number} user_id - User ID
+   * @returns {Promise<Array<number>>} Distinct case IDs
+   */
+  static async getCaseIdsByUserId(user_id) {
+    try {
+      const result = await query(
+        `SELECT DISTINCT case_id FROM case_lawyers
+         WHERE user_id = $1 AND case_id IS NOT NULL`,
+        [user_id]
+      );
+      return result.rows.map(row => row.case_id);
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = CaseLawyer;

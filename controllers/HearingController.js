@@ -511,6 +511,67 @@ class HearingController {
       });
     }
   }
+
+  // Get hearings for the calendar view within an explicit date range
+  static async getCalendarHearings(req, res) {
+    try {
+      const userId = req.user.user_id;
+      const { start, end } = req.query;
+
+      const isValidDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || '');
+
+      if (!isValidDate(start) || !isValidDate(end)) {
+        return res.status(400).json({
+          success: false,
+          message: 'start and end are required and must be YYYY-MM-DD dates'
+        });
+      }
+
+      if (start > end) {
+        return res.status(400).json({
+          success: false,
+          message: 'start must not be after end'
+        });
+      }
+
+      // Guard against an unbounded range being used to dump the whole diary
+      const MAX_RANGE_DAYS = 120;
+      const spanDays = Math.round(
+        (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86400000
+      );
+
+      if (spanDays > MAX_RANGE_DAYS) {
+        return res.status(400).json({
+          success: false,
+          message: `Date range must not exceed ${MAX_RANGE_DAYS} days`
+        });
+      }
+
+      // Scope to the cases this user actually has access to
+      const caseIds = await CaseLawyer.getCaseIdsByUserId(userId);
+
+      if (caseIds.length === 0) {
+        return res.json({
+          success: true,
+          data: { hearings: [], range: { start, end }, total: 0 }
+        });
+      }
+
+      const result = await Hearing.getUserCalendarHearings(caseIds, start, end);
+
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      console.error('Error in getCalendarHearings:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = HearingController;

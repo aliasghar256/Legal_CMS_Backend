@@ -10,6 +10,7 @@ router.use(authMiddleware);
 // User-specific hearing routes
 router.get('/my-hearings', HearingController.getUserHearings);
 router.get('/upcoming', HearingController.getUpcomingHearings);
+router.get('/calendar', HearingController.getCalendarHearings);
 router.get('/past', HearingController.getPastHearings);
 
 // Case-specific hearing routes

@@ -927,6 +927,131 @@ class Hearing {
       throw error;
     }
   }
+
+  /**
+   * Attach lawyers and parties to a list of hearings in a single round trip.
+   * Replaces the per-hearing lookup used elsewhere in this model, which issued
+   * one query per row and did not scale for calendar-sized result sets.
+   * @param {Array} hearings - Hearing rows (mutated in place)
+   * @returns {Promise<Array>} The same hearings, with lawyers/parties attached
+   */
+  static async attachLawyersAndParties(hearings) {
+    try {
+      if (!hearings || hearings.length === 0) {
+        return hearings || [];
+      }
+
+      const caseIds = [...new Set(hearings.map(h => h.case_id).filter(Boolean))];
+
+      if (caseIds.length === 0) {
+        for (let hearing of hearings) {
+          hearing.lawyers = [];
+          hearing.parties = [];
+        }
+        return hearings;
+      }
+
+      const result = await query(
+        `SELECT cl.case_id,
+                l.lawyer_id, l.name as lawyer_name, l.license_no,
+                p.party_id, p.name as party_name, p.role, p.cnic
+         FROM case_lawyers cl
+         LEFT JOIN lawyers l ON cl.lawyer_id = l.lawyer_id
+         LEFT JOIN parties p ON cl.party_id = p.party_id
+         WHERE cl.case_id = ANY($1)`,
+        [caseIds]
+      );
+
+      // Group by case_id so every hearing on the same case reuses one lookup
+      const byCase = new Map();
+
+      for (let row of result.rows) {
+        if (!byCase.has(row.case_id)) {
+          byCase.set(row.case_id, {
+            lawyers: [],
+            parties: [],
+            lawyerIds: new Set(),
+            partyIds: new Set()
+          });
+        }
+
+        const bucket = byCase.get(row.case_id);
+
+        if (row.lawyer_id && !bucket.lawyerIds.has(row.lawyer_id)) {
+          bucket.lawyers.push({
+            lawyer_id: row.lawyer_id,
+            name: row.lawyer_name,
+            license_no: row.license_no
+          });
+          bucket.lawyerIds.add(row.lawyer_id);
+        }
+
+        if (row.party_id && !bucket.partyIds.has(row.party_id)) {
+          bucket.parties.push({
+            party_id: row.party_id,
+            name: row.party_name,
+            role: row.role,
+            cnic: row.cnic
+          });
+          bucket.partyIds.add(row.party_id);
+        }
+      }
+
+      for (let hearing of hearings) {
+        const bucket = byCase.get(hearing.case_id);
+        hearing.lawyers = bucket ? bucket.lawyers : [];
+        hearing.parties = bucket ? bucket.parties : [];
+      }
+
+      return hearings;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
+   * Get hearings for the user's cases within an arbitrary date range.
+   * Used by the calendar, which needs the leading/trailing days of adjacent
+   * months to fill the grid, so it works on an explicit range rather than a
+   * year/month pair.
+   * @param {Array} caseIds - Array of case IDs the user has access to
+   * @param {string} startDate - Inclusive range start (YYYY-MM-DD)
+   * @param {string} endDate - Inclusive range end (YYYY-MM-DD)
+   * @returns {Promise<Object>} Hearings in range, with lawyers and parties
+   */
+  static async getUserCalendarHearings(caseIds, startDate, endDate) {
+    try {
+      if (!caseIds || caseIds.length === 0) {
+        return { hearings: [], range: { start: startDate, end: endDate }, total: 0 };
+      }
+
+      const result = await query(
+        `SELECT h.hearing_id, h.case_id, h.judge_id, h.date::text AS date,
+                h.description, h.type,
+                c.case_number, c.case_type, c.status as case_status, c.stage,
+                j.name as judge_name, j.designation as judge_designation,
+                court.name as court_name, court.location as court_location
+         FROM hearings h
+         LEFT JOIN cases c ON h.case_id = c.case_id
+         LEFT JOIN judges j ON h.judge_id = j.judge_id
+         LEFT JOIN courts court ON j.court_id = court.court_id
+         WHERE h.case_id = ANY($1)
+         AND h.date BETWEEN $2 AND $3
+         ORDER BY h.date ASC, h.hearing_id ASC`,
+        [caseIds, startDate, endDate]
+      );
+
+      await Hearing.attachLawyersAndParties(result.rows);
+
+      return {
+        hearings: result.rows,
+        range: { start: startDate, end: endDate },
+        total: result.rows.length
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 
 module.exports = Hearing;
